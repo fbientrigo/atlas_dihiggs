@@ -1,10 +1,12 @@
-# dir (glob ok, relative to workspace)<TAB>authority<TAB>prune (yes|keep)<TAB>tables: NAME=GLOB ... (globs relative to dir)
+# dir (glob ok, relative to workspace)<TAB>authority<TAB>prune (yes|keep, then -GLOB ...)<TAB>tables: NAME=GLOB[@compact] ... (globs relative to dir)
 # First matching row owns a file. "keep" = upload but never delete locally (live work / code repos).
-dihiggs_boundary/data/runs/adaptive_m2_boundary_v1	historical	yes	boundary_points=raw_adaptive_points.csv boundary_leaves=mesh_leaves.csv boundary_seed_points=seed_profiled_points.csv
-dihiggs_boundary/data/runs/adaptive_m2_boundary_exploration_v1	historical	yes	boundary_points=raw_exploration_points.csv boundary_leaves=exploration_leaves.csv
-dihiggs_boundary/data/runs/profiled_m2_boundary_v1*	historical	yes	boundary_points=raw_profiled_points.csv
-dihiggs_boundary/data/runs	historical	yes	
-dihiggs_boundary/campaigns/survivor_*	candidate	yes	survivor_points=raw_fresh_12520_tanbeta_v2_points.parquet survivor_leaf_aggregate=aggregate/rectangular_leaf_aggregate.parquet
+# "yes -GLOB": prunable, but files whose basename matches GLOB are never pruned (run state and configs a later run resumes from).
+# "@compact": theory-invalid rows of that table store output columns as float32 (inputs exact; blob stays lossless). New commits only.
+dihiggs_boundary/data/runs/adaptive_m2_boundary_v1	historical	yes -*_state.json -*.yaml	boundary_points=raw_adaptive_points.csv@compact boundary_leaves=mesh_leaves.csv boundary_seed_points=seed_profiled_points.csv
+dihiggs_boundary/data/runs/adaptive_m2_boundary_exploration_v1	historical	yes -*_state.json -*.yaml	boundary_points=raw_exploration_points.csv@compact boundary_leaves=exploration_leaves.csv
+dihiggs_boundary/data/runs/profiled_m2_boundary_v1*	historical	yes -*_state.json -*.yaml	boundary_points=raw_profiled_points.csv@compact
+dihiggs_boundary/data/runs	historical	yes -*_state.json -*.yaml	
+dihiggs_boundary/campaigns/survivor_*	candidate	yes -*_state.json -*.yaml	survivor_points=raw_fresh_12520_tanbeta_v2_points.parquet@compact survivor_leaf_aggregate=aggregate/rectangular_leaf_aggregate.parquet
 dihiggs/campaigns/t2_t4_*	candidate	yes	calculator_agreement=calculator_scan_agreement.jsonl
 dihiggs/campaigns/lambda7_*	candidate	keep	
 dihiggs_hep_cross/campaigns/*	candidate	yes	

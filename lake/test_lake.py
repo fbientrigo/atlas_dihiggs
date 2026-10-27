@@ -1,6 +1,6 @@
 """Roundtrip: commit -> verify -> prune -> restore, plus safety guards and the explored view, with a local-dir remote
 (no Drive needed). Run: python test_lake.py"""
-import argparse, json, os, subprocess, sys, tempfile
+import argparse, csv, json, os, struct, subprocess, sys, tempfile
 from pathlib import Path
 
 import duckdb
@@ -40,6 +40,7 @@ def main():
             pass
     git_guard()
     explored_and_old_records()
+    compact_keep_and_export()
     print("ok")
 
 
@@ -99,7 +100,7 @@ def explored_and_old_records():
         del old["conventions"]; old["cid"] = "20261001T000000Z-000000"  # pre-2026-10-27 record format
         (remote / "commits" / f"{old['cid']}.json").write_text(json.dumps(old)); lake.verify(lake.Remote(str(remote)), old["cid"])
         q = lambda **kw: lake.cmd_explored(argparse.Namespace(remote=str(remote), offline=True, rows=10, **{
-            "lambda7": None, "mh": None, "tan_beta": None, "mphi": None, "mbar": None, **kw}))
+            "lambda7": None, "mh": None, "tan_beta": None, "mphi": None, "mbar": None, "export": None, **kw}))
         q()  # summary
         q(lambda7="nonzero", mh=125.2, tan_beta=1e5, mphi=135, mbar=135)  # inside leaf A -> found
         for miss in (dict(lambda7="0", mphi=135, mbar=135), dict(mphi=200, mbar=135)):  # other regime / outside the mesh
@@ -112,6 +113,60 @@ def explored_and_old_records():
                           "WHERE commit = ? ORDER BY 1", [cid]).fetchall()
         assert got == [("A", "valid", 2, 1, "p1", "d1", "mh_125p20"), ("B", "unknown", 2, 0, None, "d1", "mh_125p20")], got
         assert con.execute("SELECT convention_id FROM regimes WHERE cid = ?", [old["cid"]]).fetchone() == (None,)
+
+
+def compact_keep_and_export():
+    """@compact: valid rows and every input of invalid rows exact, invalid outputs float32; sources.tsv -GLOB is never pruned;
+    explored --export round-trips tan_beta ~ 1e7 exactly."""
+    cols = sorted(lake.POINT_COLUMNS - {"campaign_id"}) + ["X_lambda6_times_tan_beta", "width_bb_GeV", "lambda1_reconstructed"]
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t); src, remote = t / "run", t / "remote"; src.mkdir()
+        with open(src / "points.csv", "w") as f:
+            f.write("campaign_id," + ",".join(cols) + "\n")
+            for i in range(6):  # tan_beta 1e7 + 0.1234...: float32 would round it to 1e7
+                r = dict(point_id=f"p{i}", theory_ok_v1=int(i == 0), g_physical_hphiphi_GeV=1.0000001 + i, mesh_leaf_id="A",
+                         mphi_min_GeV=130, mphi_max_GeV=140, Mbar_min_GeV=130, Mbar_max_GeV=140, lambda7_input=0.0,
+                         mh_input_GeV=125.2, tan_beta_input=1e7 + 0.123456789 * i, X_lambda6_times_tan_beta=0.1 + 1e-12 * i,
+                         width_bb_GeV=1.234567890123e-9 * (i + 1), lambda1_reconstructed=0.25 + 1e-13 * i)
+                f.write("c," + ",".join(repr(r[c]) if isinstance(r[c], float) else str(r[c]) for c in cols) + "\n")
+        (src / "mesh_state.json").write_text("{}")
+        plain = lake.cmd_commit(ns(remote, dir=str(src), table=["pts=points.csv"]))
+        small = lake.cmd_commit(ns(remote, dir=str(src), table=["pts=points.csv@compact"]))
+        rec = json.loads((remote / "commits" / f"{small}.json").read_text())
+        assert [(x["rows"], x.get("compact")) for x in rec["tables"]] == [(1, None), (5, "invalid_outputs_float32")], rec["tables"]
+        con = duckdb.connect()
+        inv = str(remote / "tables" / "pts" / f"commit={small}" / "part-1.parquet")
+        types = dict(con.execute(f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM '{inv}')").fetchall())
+        assert types["width_bb_GeV"] == types["lambda1_reconstructed"] == types["g_physical_hphiphi_GeV"] == "FLOAT", types
+        assert types["tan_beta_input"] == types["X_lambda6_times_tan_beta"] == types["mh_input_GeV"] == "DOUBLE", types
+        get = lambda cid: {r[0]: r for r in con.execute(f"SELECT point_id, * EXCLUDE (point_id, commit) FROM read_parquet("
+                           f"'{remote}/tables/pts/*/*.parquet', hive_partitioning=true, union_by_name=true) WHERE commit = ?", [cid]).fetchall()}
+        a, b = get(plain), get(small)
+        names = [d[0] for d in con.execute(f"SELECT point_id, * EXCLUDE (point_id, commit) FROM read_parquet('{remote}/tables/pts/*/*.parquet', "
+                                           "hive_partitioning=true, union_by_name=true) LIMIT 0").description]
+        f32 = lambda x: struct.unpack("f", struct.pack("f", x))[0]
+        for pid in a:
+            for n, x, y in zip(names, a[pid], b[pid]):
+                quantized = pid != "p0" and n in ("width_bb_GeV", "lambda1_reconstructed", "g_physical_hphiphi_GeV")
+                assert y == (f32(x) if quantized else x), (pid, n, x, y)
+        assert b["p5"][names.index("tan_beta_input")] == 1e7 + 0.123456789 * 5
+        key = "tan_beta_input, X_lambda6_times_tan_beta, lambda7_input, mh_input_GeV, point_id"  # dedupe by inputs stays exact
+        q = f"SELECT {key} FROM read_parquet('{remote}/tables/pts/*/*.parquet', hive_partitioning=true, union_by_name=true) WHERE commit = ?"
+        assert con.execute(f"SELECT count(*) FROM ({q}) JOIN ({q}) USING ({key})", [plain, small]).fetchone()[0] == 6
+
+        real = lake.sources  # a "yes -*_state.json" row: the state file stays, the rest is pruned
+        lake.sources = lambda: iter([(src, "candidate", True, [], ["*_state.json"])])
+        try:
+            lake.cmd_prune(argparse.Namespace(remote=str(remote), cid=small, yes=True, allow_unpushed=True, older_than=0))
+        finally:
+            lake.sources = real
+        assert (src / "mesh_state.json").exists() and not (src / "points.csv").exists()
+
+        out = t / "explored.csv"
+        lake.cmd_explored(argparse.Namespace(remote=str(remote), offline=True, rows=10, lambda7="0", mh=None, tan_beta=None,
+                                             mphi=None, mbar=None, export=str(out)))
+        got = sorted(float(r["tan_beta"]) for r in csv.DictReader(open(out)))
+        assert got == sorted(2 * [1e7 + 0.123456789 * i for i in range(6)]), got  # one row per leaf x commit, exact
 
 
 if __name__ == "__main__":

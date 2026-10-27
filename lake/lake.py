@@ -5,7 +5,7 @@ Remote layout (LAKE_REMOTE or --remote; "name:path" -> rclone, otherwise a plain
   blobs/<sha256>.tar.zst  tables/<name>/commit=<cid>/part-0.parquet  commits/<cid>.json  catalog.sql
 Remote objects are immutable: lake only ever adds them. Local deletes (prune) need a verified remote copy and never touch git-tracked files.
 """
-import glob as globmod, time, argparse, datetime as dt, gzip, hashlib, json, os, secrets, shutil, socket, subprocess, sys, tempfile
+import fnmatch, glob as globmod, time, argparse, datetime as dt, gzip, hashlib, json, os, secrets, shutil, socket, subprocess, sys, tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -165,6 +165,28 @@ def to_parquet(root, glob, out, only=None):
     return con.execute(f"SELECT count(*) FROM read_parquet('{out}')").fetchone()[0]
 
 
+# Output columns that a compact table stores as float32 for theory-invalid rows. Everything else (all inputs:
+# tan_beta, masses, lambda6/X, Delta, lambda7, mh, seeds, ids, mesh bounds) stays exact, because a stored invalid
+# point is the record that it was already run. Allowlist on purpose: an unknown column is never quantized.
+COMPACT_OUTPUTS = ("*_reconstructed*", "two_hdmc_*", "g_*", "width_*", "total_width_GeV", "br_*", "ctau_mm")
+
+
+def compact(src, valid, invalid):
+    """Split a point table: valid rows (theory_ok_v1 = 1) unchanged; invalid rows with DOUBLE outputs as FLOAT.
+    Readers that union both parts (union_by_name) see DOUBLE again. Returns [(path, rows)] for non-empty parts."""
+    con, src = duckdb.connect(), "read_parquet('" + str(src).replace("'", "''") + "')"
+    cols = con.execute(f"DESCRIBE SELECT * FROM {src}").fetchall()
+    out = ", ".join(f'"{c}"::FLOAT AS "{c}"' if t == "DOUBLE" and any(fnmatch.fnmatchcase(c, g) for g in COMPACT_OUTPUTS) else f'"{c}"'
+                    for c, t, *_ in cols)
+    bad, parts = "coalesce(TRY_CAST(theory_ok_v1 AS DOUBLE), 0) != 1", []
+    for dst, q in ((valid, f"SELECT * FROM {src} WHERE NOT ({bad})"), (invalid, f"SELECT {out} FROM {src} WHERE {bad}")):
+        con.execute(f"COPY ({q}) TO '{dst}' (FORMAT parquet, COMPRESSION zstd)")
+        n = con.execute(f"SELECT count(*) FROM read_parquet('{dst}')").fetchone()[0]
+        if n:
+            parts.append((dst, n))
+    return parts
+
+
 def cmd_commit(a):
     rem, root = _remote(a), Path(a.dir).resolve()
     cid = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + secrets.token_hex(3)
@@ -187,14 +209,17 @@ def cmd_commit(a):
         rec["source_manifest"] = {"path": f"manifests/{cid}.json.gz", "md5": _hash(mj, "md5")}
         rem.put(mj, rec["source_manifest"]["path"])
         for spec in a.table:
-            name, glob = spec.split("=", 1)
+            name, glob = spec.split("=", 1); glob, _, mode = glob.partition("@")  # NAME=GLOB@compact: see compact()
             pq = Path(tmp, f"{name}.parquet")
             rows = to_parquet(root, glob, pq, getattr(a, "only", None))
             if rows is None:
                 continue
-            rel = f"tables/{name}/commit={cid}/part-0.parquet"
-            rem.put(pq, rel)
-            rec["tables"].append({"name": name, "glob": glob, "rows": rows, "path": rel, "md5": _hash(pq, "md5")})
+            parts = compact(pq, Path(tmp, f"{name}.valid.parquet"), Path(tmp, f"{name}.invalid.parquet")) if mode == "compact" else [(pq, rows)]
+            for i, (part, n) in enumerate(parts):
+                rel = f"tables/{name}/commit={cid}/part-{i}.parquet"
+                rem.put(part, rel)
+                rec["tables"].append({"name": name, "glob": glob, "rows": n, "path": rel, "md5": _hash(part, "md5"),
+                                      **({"compact": "invalid_outputs_float32"} if part.name.endswith(".invalid.parquet") else {})})
         verify(rem, cid, rec)  # before the record: a commit record must never point at a missing/partial object
         cj = Path(tmp, "c.json"); cj.write_text(json.dumps(rec, indent=1))
         rem.put(cj, f"commits/{cid}.json")
@@ -266,11 +291,12 @@ def cmd_prune(a):
     cutoff = time.time() - a.older_than * 86400
     root, delete, keep = Path(rec["source_path"]), [], []
     git = tracked(root) if root.is_dir() else set()
+    never = [g for *_, globs in rules(root) for g in globs]  # sources.tsv "yes -GLOB": e.g. run state a later run resumes from
     for f in load_files(rem, rec):
         p = root / f["path"]
-        ok = str(p) not in git and p.is_file() and p.stat().st_mtime < cutoff and p.stat().st_size == f["size"] and _hash(p, "sha256") == f["sha256"]
+        ok = not any(fnmatch.fnmatchcase(p.name, g) for g in never) and str(p) not in git and p.is_file() and p.stat().st_mtime < cutoff and p.stat().st_size == f["size"] and _hash(p, "sha256") == f["sha256"]
         (delete if ok else keep).append(p)
-    print(f"{len(delete)} files safe to delete, {len(keep)} kept (git-tracked, missing, or changed since commit)")
+    print(f"{len(delete)} files safe to delete, {len(keep)} kept (sources.tsv keep glob, git-tracked, missing, or changed since commit)")
     if not a.yes:
         print("dry run; pass --yes to delete"); return
     locked = []
@@ -395,6 +421,9 @@ def cmd_explored(a):
     con, where = connect(a), (" WHERE " + " AND ".join(w)) if w else ""
     if not con.execute("SELECT count(*) FROM duckdb_views() WHERE view_name = 'explored'").fetchone()[0]:
         sys.exit("no point tables in the lake (need columns: " + ", ".join(sorted(POINT_COLUMNS)) + ")")
+    if a.export:  # the file a boundary run takes as --explored: it never needs lake.py, rclone or DuckDB
+        rel = con.sql(f"SELECT * FROM explored{where} ORDER BY leaf_id, commit", params=args)
+        rel.write_csv(a.export); print(f"exported {len(rel)} explored leaves to {a.export}"); return
     if a.mphi is None and a.mbar is None:
         sql = f"SELECT lambda7, mh_GeV, tan_beta, convention_id, status, count(*) AS leaves, sum(n_points) AS points FROM explored{where} GROUP BY ALL ORDER BY ALL"
     else:
@@ -407,20 +436,26 @@ def cmd_explored(a):
 
 
 def sources():
-    """sources.tsv rows -> (dir, authority, prune?, {table: glob}); globs expand; first matching row owns a file."""
+    """sources.tsv rows -> (dir, authority, prune?, [NAME=GLOB], [never-prune basename globs]); first matching row owns a file."""
     for ln in Path(__file__).with_name("sources.tsv").read_text().splitlines():
         if ln.strip() and not ln.startswith("#"):
             pat, auth, prune, *t = ln.split("\t") + [""]
+            prune, *never = prune.split()
             for d in sorted(globmod.glob(str(WORKSPACE / pat))):
                 if Path(d).is_dir():
-                    yield Path(d), auth, prune == "yes", [x for x in (t[0].split() if t else []) if x]
+                    yield Path(d), auth, prune == "yes", [x for x in (t[0].split() if t else []) if x], [g.lstrip("-") for g in never]
+
+
+def rules(root):
+    """sources.tsv rows at, above or below root (a nested row counts too: a "keep" block inside a prunable dir)."""
+    return [(d, p, never) for d, _, p, _, never in sources() if d == root or d in root.parents or root in d.parents]
 
 
 def cmd_sync(a):
     """Commit whatever local files no commit covers yet; then (with --yes) prune committed files older than --older-than."""
     rem = _remote(a); recs = records(rem)
     plan, claimed = [], {}
-    for d, auth, prune, tables in sources():
+    for d, auth, prune, tables, _ in sources():
         mine = {}
         for f in scan(d, set()):
             k = str(d / f["path"])
@@ -445,8 +480,8 @@ def cmd_sync(a):
     print(f"{new} new commits")
     for rec in records(rem):  # records() re-reads the mirror, which now includes the commits just made
         root = Path(rec["source_path"])
-        rows = [(d, p) for d, _, p, _ in sources() if d == root or d in root.parents or root in d.parents]  # nested "keep" blocks
-        if not rows or not all(p for _, p in rows) or not any((root / f["path"]).is_file() for f in load_files(rem, rec)):
+        rows = rules(root)
+        if not rows or not all(p for _, p, _ in rows) or not any((root / f["path"]).is_file() for f in load_files(rem, rec)):
             continue
         try:
             cmd_prune(argparse.Namespace(remote=a.remote, cid=rec["cid"], yes=a.yes, allow_unpushed=False, older_than=a.older_than))
@@ -477,7 +512,9 @@ def main():
     x = s.add_parser("explored", help="is this region/point already explored for a regime? (coverage from point tables)")
     x.add_argument("--lambda7", metavar="VALUE|nonzero"); x.add_argument("--mh", type=float, metavar="GeV")
     x.add_argument("--tan-beta", type=float); x.add_argument("--mphi", type=float, metavar="GeV"); x.add_argument("--mbar", type=float, metavar="GeV")
-    x.add_argument("--offline", action="store_true"); x.add_argument("--rows", type=int, default=40); x.set_defaults(f=cmd_explored)
+    x.add_argument("--offline", action="store_true"); x.add_argument("--rows", type=int, default=40)
+    x.add_argument("--export", metavar="FILE.csv", help="write the matching explored rows (one per leaf x commit) for a boundary run's --explored")
+    x.set_defaults(f=cmd_explored)
     s.add_parser("catalog", help="regenerate catalog.sql (not done per commit)").set_defaults(f=cmd_catalog)
     a = p.parse_args(); a.f(a)
 

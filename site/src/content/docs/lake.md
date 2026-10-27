@@ -1,128 +1,83 @@
 ---
-title: "Data Lake (Optional)"
-description: "Columnar Parquet storage, DuckDB SQL queries, and commit provenance archives."
+title: "Data Lake"
+description: "Lossless storage of campaign output, a queryable index, and the explored-coverage loop that keeps runs from repeating work."
 ---
 
-<div class="wired-card">
-  <div class="wired-card-header">
-    <span>// DATA_LAKE_ARCHIVE: PARQUET TABLES & PROVENANCE TIERS</span>
-    <span class="wired-pill">OPTIONAL STORAGE</span>
-  </div>
-  <p style="margin-bottom: 0;">
-    The DiHiggs Data Lake is an optional cloud storage and metadata query client backed by Google Drive (<code>dihiggs_lake:store</code>). It manages large simulation datasets, analysis tables, and commit provenance archives. Consult the repository documentation at <a href="https://github.com/fbientrigo/atlas_dihiggs/blob/main/lake/README.md"><code>lake/README.md</code></a> for full specifications.
-  </p>
-</div>
+The lake (`lake/lake.py`) keeps every campaign file on a remote store (`dihiggs_lake:store` on Google Drive, or any local directory) and a small Parquet index of the point tables. It is optional: builds and tests do not need it. Design and measured numbers: [`lake/ARCHITECTURE.md`](https://github.com/fbientrigo/atlas_dihiggs/blob/main/lake/ARCHITECTURE.md).
 
-## Storage Architecture
+## What the remote holds
 
-The remote Drive storage organizes data into three immutable object tiers:
+Objects are only ever added, never rewritten or deleted.
 
-<div class="wired-grid">
-  <div class="wired-card" style="margin-bottom: 0;">
-    <div class="wired-card-header">
-      <span>IMMUTABLE BLOBS</span>
-      <span class="wired-pill">TIER 1</span>
-    </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0;">
-      <code>blobs/&lt;sha256&gt;.tar.zst</code><br/>
-      Full lossless archives of complete campaign commits. Downloaded only during full dataset restoration.
-    </p>
-  </div>
+| Path | Content |
+|---|---|
+| `blobs/<sha256>.tar.zst` | every file of a commit, byte for byte. Physics claims come from here. |
+| `manifests/<cid>.json.gz` | sha256 and size of each file |
+| `tables/<name>/commit=<cid>/*.parquet` | the queryable index of point and leaf files |
+| `commits/<cid>.json` | authority, committer git, producer git, mass convention |
 
-  <div class="wired-card" style="margin-bottom: 0;">
-    <div class="wired-card-header">
-      <span>QUERYABLE TABLES</span>
-      <span class="wired-pill">TIER 2</span>
-    </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0;">
-      <code>tables/&lt;name&gt;/commit=&lt;cid&gt;/*.parquet</code><br/>
-      Columnar Parquet datasets for tabular scan data (~180 MB). Queryable directly via DuckDB without downloading heavy blob archives.
-    </p>
-  </div>
+Queries read only `commits/` and `tables/` (a local mirror in `~/.cache/lake`), never blobs.
 
-  <div class="wired-card" style="margin-bottom: 0;">
-    <div class="wired-card-header">
-      <span>PROVENANCE MANIFESTS</span>
-      <span class="wired-pill">TIER 3</span>
-    </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0;">
-      <code>commits/&lt;cid&gt;.json</code><br/>
-      Provenance metadata capturing Git HEAD commit, working tree dirty status, authority labels, and timestamps.
-    </p>
-  </div>
-</div>
-
----
-
-## Setup & Configuration
-
-The data lake is optional and not required for standard code builds, unit tests, or workspace validation.
-
-### 1. Install DuckDB
-```bash
-pip install duckdb
-```
-
-### 2. Configure `rclone`
-Configure a remote named `dihiggs_lake` with type `drive` and scope `drive`:
-```bash
-rclone config
-```
-*(Browser authentication is used for Google OAuth; credentials are not stored in the repository).*
-
-To use an alternative remote target, set the `LAKE_REMOTE` environment variable:
-```bash
-export LAKE_REMOTE="my_remote:path"
-```
-
----
-
-## Daily Usage
-
-The query and synchronization tool is executed via `lake/lake.py`:
-
-### Querying Metadata with SQL
-
-Run interactive SQL queries on table metadata mirrored locally to `~/.cache/lake`:
+## Setup
 
 ```bash
-# Query boundary points with non-zero trilinear input
-python3 lake/lake.py query "SELECT count(*) FROM boundary_points WHERE lambda7_input != 0"
-
-# Inspect commit provenance and authority labels
-python3 lake/lake.py query "SELECT cid, authority, message FROM commits"
-
-# Join point data with commit provenance
-python3 lake/lake.py query "SELECT p.*, c.authority FROM boundary_points p JOIN commits c ON p.commit = c.cid"
+pip install duckdb            # the workspace .venv already has it
+rclone config                 # remote "dihiggs_lake", type drive, scope drive
+export LAKE_REMOTE=name:path  # optional: another rclone remote, or a plain directory
 ```
 
-Use `--offline` to skip remote cache refresh during offline work.
-
-### Inspecting Commits
-
-List recorded campaign commits, authority tags, and status:
+## Commands
 
 ```bash
-python3 lake/lake.py ls
+python lake/lake.py ls                       # commits: authority, code HEAD, source dir
+python lake/lake.py query "SQL"              # views: commits, regimes, explored, one per table
+python lake/lake.py explored                 # coverage per regime and status
+python lake/lake.py explored --lambda7 nonzero --mh 125.2 --tan-beta 1e5 --mphi 150 --mbar 160
+python lake/lake.py explored --lambda7 0 --mh 125.2 --export explored.csv
+python lake/lake.py sync                     # commit new files per sources.tsv, then a dry-run cleanup
+python lake/lake.py restore <cid> <dir>      # download and sha256-check one commit
+python lake/lake.py verify <cid>
 ```
 
-### Synchronizing Local Data
+Add `--offline` to skip the mirror refresh.
 
-Synchronize local files matching patterns declared in `lake/sources.tsv`:
+## Regimes and the explored view
+
+A **regime** is `lambda7`, `mh` (per row) plus the producer commit and `convention_id` (per commit; commits before 2026-10-27 have no convention, so `mh` is the proxy there).
+
+`explored` has one row per regime × campaign × commit × leaf, built from every table with the point columns. Its `status` is:
+
+- `valid`: at least one `theory_ok_v1 = 1` point;
+- `excluded`: 0 valid out of at least 64 points (95% upper bound on the valid fraction below 4.6%);
+- `unknown`: anything else. `upper95_valid_fraction` is always given.
+
+Coverage of one regime never answers for another: a `lambda7 = 0` leaf is "not explored" for `lambda7 != 0`.
+
+## The next run reads the lake
+
+The boundary survivor campaign (v2) takes the export as input, so it needs neither lake.py nor rclone:
 
 ```bash
-# Dry run: check which files would be uploaded or cleaned
-python3 lake/lake.py sync
-
-# Execute upload and remove verified local files older than 2 days
-python3 lake/lake.py sync --yes --older-than 2
+python lake/lake.py explored --lambda7 0 --mh 125.2 --export explored.csv
+cd dihiggs_boundary && PYTHONPATH=python python -m dhb.survivor_adaptive_campaign \
+    --config <campaign.yaml> --output-dir <dir> --explored ../explored.csv
 ```
 
-### Restoring Campaign Datasets
+Each leaf the run creates starts from the recorded `n_points` and `n_valid` of the same leaf (id and rectangle) in the same regime. Explored leaves cost no new evaluations, excluded leaves are not re-sampled, and partial leaves continue with the next replicate seed. The manifest records the export's sha256 under `explored_seed`. Without `--explored` the run resumes from its local `campaign_state.json` as before.
 
-Download and verify a complete campaign commit by its commit ID:
+## Safety rules
 
-```bash
-python3 lake/lake.py restore <cid> <destination-dir>
-python3 lake/lake.py verify <cid>
-```
+- `sync --yes` and `prune --yes` delete a local file only when the remote md5 re-verifies, size, sha256 and the mtime cutoff all match, and the file is not git-tracked. If git cannot answer, nothing is deleted.
+- Prune removes only directories it emptied, never the root.
+- A `keep` row anywhere under a commit's root blocks pruning that commit.
+- A `yes -GLOB` row keeps files whose name matches `GLOB`. The boundary rows keep `*_state.json` and `*.yaml`, so a later run can always resume.
+- A commit record is written only after its objects verify.
+- `restore` refuses to overwrite a local file whose content differs.
+
+## Compact tables
+
+`NAME=GLOB@compact` in `sources.tsv` stores theory-invalid rows (`theory_ok_v1 != 1`) of that table with their output columns as float32. Inputs stay exact, so the table still says which points were already run: tan β, masses, λ6/X, Δ, λ7, mh, seeds, ids and mesh bounds. Valid rows are unchanged, and the blob keeps everything at full precision. This applies to new commits only. On the measured `boundary_points` (1.23M rows, 3.4% valid) it halves the table, 163 MB to 87 MB.
+
+## Adding data
+
+Add one line to `lake/sources.tsv`: directory glob, authority, prune rule, and `NAME=GLOB` for files that should become tables. Tests: `python lake/test_lake.py` (local-directory remote, no Drive).
