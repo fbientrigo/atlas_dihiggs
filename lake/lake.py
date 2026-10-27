@@ -3,6 +3,7 @@
 
 Remote layout (LAKE_REMOTE or --remote; "name:path" -> rclone, otherwise a plain local dir):
   blobs/<sha256>.tar.zst  tables/<name>/commit=<cid>/part-0.parquet  commits/<cid>.json  catalog.sql
+Remote objects are immutable: lake only ever adds them. Local deletes (prune) need a verified remote copy and never touch git-tracked files.
 """
 import glob as globmod, time, argparse, datetime as dt, gzip, hashlib, json, os, secrets, shutil, socket, subprocess, sys, tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -93,13 +94,16 @@ def on_remote(repo, head):
     return r.returncode == 0 and bool(r.stdout.strip())
 
 
-def producer_git(root, extra=()):
-    """Git records found in the run manifest (any dict with 'commit'); [] means unknown. Not invented."""
+def manifest_records(root, extra=(), key="commit"):
+    """Records found in the run manifest: key="commit" -> git records (any dict with 'commit'),
+    key="convention_id" -> mass-convention blocks (dihiggs convention_provenance). [] means unknown. Not invented."""
     found = []
     def walk(o, p):
         if isinstance(o, dict):
-            if isinstance(o.get("commit"), str):
+            if key == "commit" and isinstance(o.get("commit"), str):
                 found.append({"path": p, "commit": o["commit"], "dirty": o.get("dirty", o.get("is_dirty"))})
+            elif key == "convention_id" and isinstance(o.get("convention_id"), str):
+                found.append({"path": p, "convention_id": o["convention_id"], "source_sha256": o.get("source_sha256")})
             for k, v in o.items():
                 walk(v, f"{p}.{k}" if p else k)
         elif isinstance(o, list):
@@ -175,7 +179,8 @@ def cmd_commit(a):
         rec = {"cid": cid, "message": a.message, "authority": a.authority, "source_path": str(root),
                "host": socket.gethostname(), "created_utc": cid.split("-")[0],
                "blob": {"sha256": bsha, "md5": _hash(blob, "md5"), "size": blob.stat().st_size, "n_files": len(files)},
-               "tables": [], "producer_git": producer_git(root, a.producer_manifest), "committer_git": git_state(root)}
+               "tables": [], "producer_git": manifest_records(root, a.producer_manifest), "committer_git": git_state(root),
+               "conventions": manifest_records(root, a.producer_manifest, "convention_id")}
         mj = Path(tmp, "m.json.gz")  # per-file hashes live in their own object so the commits/ view stays small
         with gzip.open(mj, "wt") as f:
             json.dump(files, f)
@@ -190,19 +195,24 @@ def cmd_commit(a):
             rel = f"tables/{name}/commit={cid}/part-0.parquet"
             rem.put(pq, rel)
             rec["tables"].append({"name": name, "glob": glob, "rows": rows, "path": rel, "md5": _hash(pq, "md5")})
+        verify(rem, cid, rec)  # before the record: a commit record must never point at a missing/partial object
         cj = Path(tmp, "c.json"); cj.write_text(json.dumps(rec, indent=1))
-        rem.put(cj, f"commits/{cid}.json")  # written last: a commit record implies everything else was uploaded
-    verify(rem, cid, rec)
+        rem.put(cj, f"commits/{cid}.json")
     print(f"committed {cid}: {len(files)} files, {len(rec['tables'])} tables, blob {rec['blob']['size']} B")
     return cid
 
 
-def write_catalog(rem, tmp):
-    sql = ["CREATE OR REPLACE VIEW commits AS SELECT * FROM read_json_auto('commits/*.json');"]
-    for t in rem.ls("tables", dirs=True):
+def catalog_sql(tables):
+    sql = ["CREATE OR REPLACE VIEW commits AS SELECT * FROM read_json_auto('commits/*.json', union_by_name=true);"]
+    for t in tables:
         sql.append(f"CREATE OR REPLACE VIEW {t} AS SELECT * FROM read_parquet('tables/{t}/*/*.parquet', "
                    "hive_partitioning=true, union_by_name=true);")
-    p = Path(tmp, "catalog.sql"); p.write_text("\n".join(sql) + "\n")
+    return "\n".join(sql) + "\n"
+
+
+def write_catalog(rem, tmp):
+    """catalog.sql on the remote, for readers without lake.py (query/explored build their views from the mirror)."""
+    p = Path(tmp, "catalog.sql"); p.write_text(catalog_sql(rem.ls("tables", dirs=True)))
     rem.put(p, "catalog.sql")
 
 
@@ -237,6 +247,16 @@ def cmd_verify(a):
     verify(_remote(a), a.cid); print("ok")
 
 
+def tracked(root):
+    """Absolute paths of git-tracked files under root (incl. submodules); empty if root is in no repo."""
+    r = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--recurse-submodules"], capture_output=True)
+    if r.returncode != 0:
+        if b"not a git repository" in r.stderr:
+            return set()
+        sys.exit(f"refusing: cannot list git-tracked files under {root}: {r.stderr.decode()[:200]}")
+    return {str(Path(root, x)) for x in r.stdout.decode().split("\0") if x}
+
+
 def cmd_prune(a):
     rem = _remote(a)
     rec = verify(rem, a.cid)  # always re-checked remotely, never cached
@@ -245,11 +265,12 @@ def cmd_prune(a):
         sys.exit(f"refusing: code HEAD {g['head'][:7]} is not on its remote (push it, or --allow-unpushed)")
     cutoff = time.time() - a.older_than * 86400
     root, delete, keep = Path(rec["source_path"]), [], []
+    git = tracked(root) if root.is_dir() else set()
     for f in load_files(rem, rec):
         p = root / f["path"]
-        ok = p.is_file() and p.stat().st_mtime < cutoff and p.stat().st_size == f["size"] and _hash(p, "sha256") == f["sha256"]
+        ok = str(p) not in git and p.is_file() and p.stat().st_mtime < cutoff and p.stat().st_size == f["size"] and _hash(p, "sha256") == f["sha256"]
         (delete if ok else keep).append(p)
-    print(f"{len(delete)} files safe to delete, {len(keep)} kept (missing or changed since commit)")
+    print(f"{len(delete)} files safe to delete, {len(keep)} kept (git-tracked, missing, or changed since commit)")
     if not a.yes:
         print("dry run; pass --yes to delete"); return
     locked = []
@@ -260,21 +281,24 @@ def cmd_prune(a):
             locked.append(p)
     if locked:
         print(f"{len(locked)} files left in place (permission denied), e.g. {locked[0]}")
-    for d, _, _ in os.walk(root, topdown=False):
-        try: os.rmdir(d)  # only succeeds if empty
+    # only dirs we emptied, deepest first, never root itself (a full os.walk would also rmdir empty dirs inside .git)
+    for d in sorted({q for p in delete for q in p.parents if root in q.parents}, key=lambda q: -len(q.parts)):
+        try: d.rmdir()  # only succeeds if empty
         except OSError: pass
 
 
 def cmd_restore(a):
     rem = _remote(a); rec = verify(rem, a.cid)
-    dest = Path(a.dest); dest.mkdir(parents=True, exist_ok=True)
+    dest = Path(a.dest); dest.mkdir(parents=True, exist_ok=True); files = load_files(rem, rec)
+    clash = [f["path"] for f in files if (dest / f["path"]).exists() and _hash(dest / f["path"], "sha256") != f["sha256"]]
+    if clash:
+        sys.exit(f"refusing: {len(clash)} files in {dest} differ from the commit (would be overwritten), e.g. {clash[:3]}")
     with tempfile.TemporaryDirectory() as tmp:
         blob = Path(tmp, "b.tar.zst")
         rem.get(f"blobs/{rec['blob']['sha256']}.tar.zst", blob)
         if _hash(blob, "sha256") != rec["blob"]["sha256"]:
             sys.exit("blob sha256 mismatch")
-        subprocess.run(["tar", "--zstd", "-xf", str(blob), "-C", str(dest)], check=True)
-    files = load_files(rem, rec)
+        subprocess.run(["tar", "--zstd", "-xf", str(blob), "-C", str(dest), "--skip-old-files"], check=True)  # existing = identical
     bad = [f["path"] for f in files if _hash(dest / f["path"], "sha256") != f["sha256"]]
     if bad:
         sys.exit(f"restore mismatch: {bad[:5]}")
@@ -308,12 +332,78 @@ def cmd_ls(a):
               "dirty" if g["dirty"] else "clean", r["source_path"].replace(str(WORKSPACE) + "/", ""), r["message"], sep="\t")
 
 
-def cmd_query(a):
-    """SQL over the catalog views (commits + one view per table) without downloading any blob."""
-    os.chdir(refresh(_remote(a), a.offline))
+# ---- explored: coverage of the parameter space, derived from the point tables --------------
+# A point table is any table with these columns (dihiggs.point.v2 rows + boundary mesh columns).
+POINT_COLUMNS = {"point_id", "campaign_id", "lambda7_input", "mh_input_GeV", "tan_beta_input", "theory_ok_v1", "g_physical_hphiphi_GeV",
+                 "mesh_leaf_id", "mphi_min_GeV", "mphi_max_GeV", "Mbar_min_GeV", "Mbar_max_GeV"}
+EXCLUDED_MIN_POINTS = 64  # = boundary survivor campaign zero_success_max_attempts (its "tested_empty_95"): upper95 < 4.6%
+EXPLORED = """CREATE OR REPLACE VIEW explored AS
+SELECT e.*, r.* EXCLUDE (cid),
+       CASE WHEN n_valid > 0 THEN 'valid' WHEN n_points >= {min_n} THEN 'excluded' ELSE 'unknown' END AS status,
+       CASE WHEN n_valid = 0 THEN 1 - 0.05 ** (1.0 / n_points) END AS upper95_valid_fraction
+FROM (SELECT lambda7_input AS lambda7, mh_input_GeV AS mh_GeV, tan_beta_input AS tan_beta,
+             mphi_min_GeV, mphi_max_GeV, Mbar_min_GeV, Mbar_max_GeV, mesh_leaf_id AS leaf_id, campaign_id, commit,
+             count(*) AS n_points, count(*) FILTER (WHERE theory_ok_v1 = 1) AS n_valid,
+             arg_max(point_id, abs(g_physical_hphiphi_GeV)) FILTER (WHERE theory_ok_v1 = 1) AS best_point_id
+      FROM ({points}) WHERE mesh_leaf_id IS NOT NULL GROUP BY ALL) e
+LEFT JOIN regimes r ON r.cid = e.commit"""
+
+
+def regime(r):
+    """Per-commit regime label: producer (dihiggs evaluator) git + mass convention. Old records lack 'conventions' -> NULL."""
+    pg = [g for g in r.get("producer_git", []) if g["path"].endswith("dihiggs_git")] or r.get("producer_git", []) or [{}]
+    cv = r.get("conventions") or [{}]
+    return (r["cid"], r["authority"], pg[0].get("commit"), pg[0].get("dirty"), cv[0].get("convention_id"), cv[0].get("source_sha256"))
+
+
+def connect(a):
+    """DuckDB on the metadata mirror: commits, one view per table, regimes (per commit) and explored (per leaf)."""
+    rem = _remote(a); recs = records(rem, a.offline)
+    os.chdir(refresh(rem, offline=True))
+    tables = sorted(p.name for p in Path("tables").iterdir() if p.is_dir()) if Path("tables").is_dir() else []
     con = duckdb.connect()
-    con.execute(Path("catalog.sql").read_text())
-    con.sql(a.sql).show(max_rows=a.rows, max_width=200)
+    con.execute(catalog_sql(tables))
+    con.execute("CREATE TABLE regimes (cid VARCHAR, authority VARCHAR, producer_commit VARCHAR, producer_dirty BOOLEAN, "
+                "convention_id VARCHAR, convention_sha256 VARCHAR)")
+    if recs:
+        con.executemany("INSERT INTO regimes VALUES (?, ?, ?, ?, ?, ?)", [regime(r) for r in recs])
+    pts = [t for t in tables if POINT_COLUMNS <= {c[0] for c in con.execute(f"DESCRIBE {t}").fetchall()}]
+    if pts:
+        cols = ", ".join(sorted(POINT_COLUMNS)) + ", commit"
+        con.execute(EXPLORED.format(min_n=EXCLUDED_MIN_POINTS, points=" UNION ALL BY NAME ".join(f"SELECT {cols} FROM {t}" for t in pts)))
+    return con
+
+
+def cmd_query(a):
+    """SQL over the views (commits, regimes, explored, one per table) without downloading any blob."""
+    connect(a).sql(a.sql).show(max_rows=a.rows, max_width=200)
+
+
+def cmd_explored(a):
+    """Without --mphi/--mbar: coverage summary per regime. With them: the leaves containing that point (exit 1 if none)."""
+    w, args = [], []
+    if a.lambda7 == "nonzero":
+        w.append("lambda7 != 0")
+    elif a.lambda7 is not None:
+        w.append("lambda7 = ?"); args.append(float(a.lambda7))
+    for col, v in (("mh_GeV", a.mh), ("tan_beta", a.tan_beta)):
+        if v is not None:
+            w.append(f"abs({col} / ? - 1) < 1e-9"); args.append(v)
+    for col, v in (("mphi", a.mphi), ("Mbar", a.mbar)):
+        if v is not None:
+            w.append(f"? BETWEEN {col}_min_GeV AND {col}_max_GeV"); args.append(v)
+    con, where = connect(a), (" WHERE " + " AND ".join(w)) if w else ""
+    if not con.execute("SELECT count(*) FROM duckdb_views() WHERE view_name = 'explored'").fetchone()[0]:
+        sys.exit("no point tables in the lake (need columns: " + ", ".join(sorted(POINT_COLUMNS)) + ")")
+    if a.mphi is None and a.mbar is None:
+        sql = f"SELECT lambda7, mh_GeV, tan_beta, convention_id, status, count(*) AS leaves, sum(n_points) AS points FROM explored{where} GROUP BY ALL ORDER BY ALL"
+    else:
+        sql = (f"SELECT status, n_valid, n_points, upper95_valid_fraction, best_point_id, leaf_id, campaign_id, commit, producer_commit "
+               f"FROM explored{where} ORDER BY status = 'valid' DESC, n_points DESC")
+    rel = con.sql(sql, params=args)
+    if not rel.fetchall():
+        print("not explored"); sys.exit(1)
+    rel.show(max_rows=a.rows, max_width=200)
 
 
 def sources():
@@ -355,7 +445,7 @@ def cmd_sync(a):
     print(f"{new} new commits")
     for rec in records(rem):  # records() re-reads the mirror, which now includes the commits just made
         root = Path(rec["source_path"])
-        rows = [(d, p) for d, _, p, _ in sources() if d == root or d in root.parents]
+        rows = [(d, p) for d, _, p, _ in sources() if d == root or d in root.parents or root in d.parents]  # nested "keep" blocks
         if not rows or not all(p for _, p in rows) or not any((root / f["path"]).is_file() for f in load_files(rem, rec)):
             continue
         try:
@@ -384,6 +474,10 @@ def main():
     x.add_argument("sql"); x.add_argument("--offline", action="store_true"); x.add_argument("--rows", type=int, default=40); x.set_defaults(f=cmd_query)
     x = s.add_parser("sync", help="commit what is new per sources.tsv; with --yes delete local files already safe in the remote")
     x.add_argument("--yes", action="store_true"); x.add_argument("--older-than", type=float, default=2, metavar="DAYS"); x.set_defaults(f=cmd_sync)
+    x = s.add_parser("explored", help="is this region/point already explored for a regime? (coverage from point tables)")
+    x.add_argument("--lambda7", metavar="VALUE|nonzero"); x.add_argument("--mh", type=float, metavar="GeV")
+    x.add_argument("--tan-beta", type=float); x.add_argument("--mphi", type=float, metavar="GeV"); x.add_argument("--mbar", type=float, metavar="GeV")
+    x.add_argument("--offline", action="store_true"); x.add_argument("--rows", type=int, default=40); x.set_defaults(f=cmd_explored)
     s.add_parser("catalog", help="regenerate catalog.sql (not done per commit)").set_defaults(f=cmd_catalog)
     a = p.parse_args(); a.f(a)
 
