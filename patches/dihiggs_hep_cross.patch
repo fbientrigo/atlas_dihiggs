@@ -1,0 +1,1852 @@
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..7a63942
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,17 @@
++# MadGraph production and data authority
++
++This repository owns the tracked MadGraph production drivers, output
++contracts, ingestion tooling, and current-campaign data-authority registry.
++It does not own the global workspace setup or the theory conventions.
++
++In a workspace checkout, begin with the [global onboarding guide](../docs/ONBOARDING.md)
++and [workspace map](../docs/WORKSPACE_MAP.md). Before using a numerical
++result, read [`docs/CURRENT_DATA_AUTHORITY.md`](docs/CURRENT_DATA_AUTHORITY.md)
++and [`state/CURRENT_CAMPAIGN.yaml`](state/CURRENT_CAMPAIGN.yaml).
++
++For production, follow this repository's [instructions](AGENTS.md) and use
++the tracked `scripts/run_physical_point_madgraph.py` driver. Verify the
++produced banner with `scripts/madgraph_banner_verification.py` before trusting
++its cross section. Do not treat a successful run as promotion to current
++authority; follow the explicit review and registry update procedure in the
++authority document.
+diff --git a/conventions/physics_conventions.lock.yaml b/conventions/physics_conventions.lock.yaml
+new file mode 100644
+index 0000000..57a6af0
+--- /dev/null
++++ b/conventions/physics_conventions.lock.yaml
+@@ -0,0 +1,7 @@
++schema: physics_conventions_cache.v1
++source_repository: fbientrigo/dihiggs
++source_commit: 087ba246e9a9fa34b16249b52629a62703893b5c
++source_path: conventions/physics_conventions.yaml
++source_sha256: 4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6
++schema_version: physics_conventions_v3
++copied_utc: "2026-10-21"
+diff --git a/conventions/physics_conventions.yaml b/conventions/physics_conventions.yaml
+index 66602bc..d187796 100644
+--- a/conventions/physics_conventions.yaml
++++ b/conventions/physics_conventions.yaml
+@@ -1,57 +1,312 @@
+-# Canonical physics conventions shared across the dihiggs ecosystem.
++# Project-wide physics authority for the active DiHiggs repository family.
+ #
+-# This file is the single VALUES-ONLY source of truth for the constants and
+-# naming conventions that must agree across the three repos:
+-#   - dihiggs            (parameter scan + data lake)
+-#   - dihiggs_boundary   (theory/experiment boundary; this repo)
+-#   - dihiggs_hep_cross  (LLP recast / paper cross-checks)
+-#
+-# It is intentionally values-only (no code) so C++ and Python, and any repo,
+-# can read the same numbers without depending on each other's packages. Keep
+-# the three copies byte-identical; `schema_version` bumps on any change and the
+-# per-repo tests pin the values so an accidental edit fails CI. (Collapsing the
+-# three copies into one shared submodule is tracked as Phase D in the
+-# inter-repo assessment.)
+-schema_version: physics_conventions_v2
+-
+-# c*tau[mm] = hbar_c_gev_mm / Gamma[GeV]
+-hbar_c_gev_mm: 1.973269804e-13
+-# c*tau[mm] = c_mm_per_ns * tau[ns]
+-c_mm_per_ns: 299.792458
+-
+-# The SM-like CP-even scalar mass used by ACTIVE physical-point production.
+-#
+-# One value, one owner. Downstream repos must read `m_h_GeV` from the canonical
+-# point (column `m_h_GeV` / `mh_input_GeV`) or from this file -- they must not
+-# carry their own default. Historical and frozen artifacts keep the value they
+-# were produced with and are labelled historical; see `supersedes` below.
+-#
+-# The DECIMAL STRING is authoritative. The float64 repr of 125.20 is
+-# 1.25200000000000003e+02, which is not byte-equal to the 1.25200000000000000e+02
+-# form required by UFO `parameters.py` and SLHA `Block MASS` entry 25. Producers
+-# that emit cards must format from the string via decimal.Decimal, not float.
+-sm_like_higgs:
+-  m_h_GeV: "125.20"
+-  source: PDG 2026 Higgs listing
+-  source_url: https://pdg.lbl.gov/encoder_listings/s126.pdf
+-  adopted_utc: "2026-08-15"
+-  applies_to: active physical-point production only
+-  supersedes:
+-    - value: "125.13"
++# `fbientrigo/dihiggs` owns this file. A downstream copy is a controlled cache,
++# never an independent authority; see `migration.downstream_copy` below.
++schema_version: physics_conventions_v3
++
++authority:
++  status: active
++  repository: fbientrigo/dihiggs
++  path: conventions/physics_conventions.yaml
++  human_contract: docs/PROJECT_PHYSICS_AUTHORITY.md
++  discrepancy_ledger: docs/PHYSICS_AUTHORITY_DISCREPANCY_LEDGER.md
++  adopted_utc: "2026-09-07"
++  decision_issue: https://github.com/fbientrigo/dihiggs/issues/83
++  scope: active new production and cross-repository handoffs
++
++constants:
++  # c*tau[mm] = hbar_c_gev_mm / Gamma[GeV]
++  hbar_c_gev_mm: 1.973269804e-13
++  # c*tau[mm] = c_mm_per_ns * tau[ns]
++  c_mm_per_ns: 299.792458
++
++mass_conventions:
++  active:
++    id: mh_125p20_active_2026
++    state: h
++    value_GeV: "125.20"
++    serialization: decimal_string
++    status: active_new_production
++    authority_kind: project_convention
++    decision_issue: https://github.com/fbientrigo/dihiggs/issues/83
++    source_label: corrected project convention
++    source_url: https://github.com/fbientrigo/dihiggs/issues/83
++    note: >-
++      Corrected project convention for new production. It is deliberately
++      distinct from external-measurement values and is serialized exactly.
++  historical:
++    - id: mh_125p13_pdg_2026_historical_replay
++      value_GeV: "125.13"
++      status: historical_replay_only
++      new_production_allowed: false
++      preserve_for_replay: true
++      scope: >-
++        Completed adaptive M2 boundary campaign and explicit regression
++        fixtures. It must never seed a new production run.
++    - id: mh_125p13_high_mass_v1
++      value_GeV: "125.13"
+       status: historical
+-      note: high-mass campaign v1, 150 GeV benchmark chain, point-v2 verification v1
+-    - value: "125.09"
++      new_production_allowed: false
++      preserve_for_replay: true
++      scope: high-mass campaign v1, 150 GeV benchmark chain, point-v2 verification v1
++    - id: mh_125p09_lambda1_boundary_legacy
++      value_GeV: "125.09"
+       status: historical
+-      note: dihiggs_boundary evaluate_point legacy 6-column input contract
+-    - value: "125.0"
+-      status: legacy
+-      note: PhysLam1Scan / autoresearch replay-only binaries; upstream UFO default
+-
+-# Internal neutral-scalar naming used across the CSV contracts and column
+-# names (eff_<hk>_*, br_<hk>_*, total_width_<hk>, mass columns).
+-neutral_scalars:
+-  h1: {symbol: h, role: SM-like CP-even, pdg_id: 25, mass_column: mh}
+-  h2: {symbol: H, role: heavy CP-even, pdg_id: 35, mass_column: mH}
+-  h3: {symbol: A, role: CP-odd, pdg_id: 36, mass_column: mA}
+-charged_scalar:
+-  hc: {symbol: H+, pdg_id: 37, mass_column: mHp}
++      new_production_allowed: false
++      preserve_for_replay: true
++      scope: lambda1 characterization and legacy boundary input
++    - id: mh_125p0_ufo_autoresearch_legacy
++      value_GeV: "125.0"
++      status: historical
++      new_production_allowed: false
++      preserve_for_replay: true
++      scope: upstream UFO default and replay-only legacy/autoresearch paths
++
++states:
++  h:
++    canonical_symbol: h
++    role: SM-like CP-even scalar
++    pdg_id: 25
++    mass_field: m_h_GeV
++    accepted_aliases: [h_SM]
++  phi:
++    canonical_symbol: phi
++    role: additional CP-even scalar and LLP candidate
++    pdg_id: 35
++    mass_field: m_phi_GeV
++    accepted_aliases: [H2]
++    legacy_mass_fields: [mH, mH_input_GeV, mH2_GeV]
++    forbidden_unqualified_aliases: [H]
++  A:
++    canonical_symbol: A
++    role: CP-odd scalar
++    pdg_id: 36
++    mass_field: mA_GeV
++  H_plus:
++    canonical_symbol: H+
++    role: charged scalar
++    pdg_id: 37
++    antiparticle_symbol: H-
++    antiparticle_pdg_id: -37
++    mass_field: mHp_GeV
++
++model:
++  family: general_2HDM
++  cp_conserving: true
++  scalar_potential_basis: generic_Phi1_Phi2
++  yukawa:
++    assignment: Type-I
++    type_code: 1
++    fixed_basis: true
++    fermion_coupling_doublet: Phi2
++    phi2_couples_to: [up_type_quarks, down_type_quarks, charged_leptons]
++    tan_beta:
++      definition: v2/v1
++      basis_dependent: true
++      meaningful_only_in_fixed_yukawa_basis: true
++  z2_breaking:
++    soft_coefficients: [m12_sq]
++    hard_coefficients: [lambda6, lambda7]
++    rule: nonzero lambda6 or lambda7 is hard Z2 breaking
++
++campaign_choices:
++  must_be_explicit_in_new_manifest: true
++  authority_supplies_no_default: true
++  exact_alignment:
++    expression: sin(beta-alpha) = 1
++    status: campaign_choice
++  lambda7_zero:
++    expression: lambda7 = 0
++    status: campaign_choice
++  neutral_charged_degeneracy:
++    expression: mA = mHp
++    status: campaign_choice
++
++parameters:
++  M2:
++    symbol: M^2
++    unit: GeV^2
++    definition: m12_sq/(sin(beta)*cos(beta))
++    basis: fixed Type-I generic basis
++    distinct_from: [m12_sq, m22_sq]
++  m12_sq:
++    symbol: m12^2
++    unit: GeV^2
++    definition: M2*sin(beta)*cos(beta)
++    potential_role: off-diagonal quadratic coefficient
++    z2_breaking: soft
++    distinct_from: [M2, m22_sq]
++  m22_sq:
++    symbol: m22^2
++    unit: GeV^2
++    definition: coefficient of Phi2^dagger*Phi2 in the declared generic-basis potential
++    potential_role: diagonal quadratic coefficient
++    distinct_from: [M2, m12_sq]
++
++trilinear_prescriptions:
++  physical_2HDM:
++    label: physical 2HDM trilinear
++    category: model_derived
++    source_repository: fbientrigo/dihiggs
++    source_calculator: 2HDMC
++    source_call: get_coupling_hhh(1,2,2,c)
++    raw_complex_fields:
++      real: two_hdmc_hphiphi_real_GeV
++      imaginary: two_hdmc_hphiphi_imag_GeV
++    signed_field: g_physical_hphiphi_GeV
++    magnitude_field: g_physical_hphiphi_abs_GeV
++    current_compatibility_field: g_hH2H2_GeV
++    current_compatibility_semantics: absolute_magnitude
++    compatibility_relation: g_hH2H2_GeV = g_physical_hphiphi_abs_GeV
++    potential_term: V contains +(g_physical_hphiphi_GeV/2!)*h*phi^2
++    interaction_term: L_int=-V contains -(g_physical_hphiphi_GeV/2!)*h*phi^2
++    identical_phi_symmetry_factor: "2!"
++    two_hdmc_return: c = -i*g_physical_hphiphi_GeV
++    feynman_rule: -i*g_physical_hphiphi_GeV
++    ufo_parameter_mapping: GH1H2H2 = -i*c = two_hdmc_hphiphi_imag_GeV = -g_physical_hphiphi_GeV
++    ufo_vertex_convention: +i*GH1H2H2
++    signed_export_status: resolved
++    sign_sensitive_use: g_physical_hphiphi_GeV
++    invalid_output_action: reject
++    convention_unknown_when: nonzero real component for the declared CP-conserving convention
++    resolution_issue: https://github.com/fbientrigo/dihiggs/issues/85
++  effective_mass_only:
++    label: project effective mass-only prescription
++    category: project_defined_effective
++    output_quantity: g_effective_hphiphi_GeV
++    formula: 8*m_phi^2/v
++    unit: GeV
++    required_inputs: [m_phi_GeV, v_GeV]
++    ufo_vertex_mapping_status: unresolved
++    sign_sensitive_use: fail_closed
++    not_a_general_2HDM_identity: true
++  effective_m22_shifted:
++    label: project effective m22-shifted prescription
++    category: project_defined_effective
++    output_quantity: g_effective_hphiphi_GeV
++    formula: 8*(m_phi^2-m22_sq)/v
++    unit: GeV
++    required_inputs: [m_phi_GeV, m22_sq_GeV2, v_GeV]
++    m22_basis_requirement: declared generic_Phi1_Phi2 basis
++    ufo_vertex_mapping_status: unresolved
++    sign_sensitive_use: fail_closed
++    not_a_general_2HDM_identity: true
++
++stage_ownership:
++  dihiggs:
++    repository: fbientrigo/dihiggs
++    owns: [model_points, theory_predicates, masses, potential_parameters, widths, branching_ratios, proper_lifetime]
++    does_not_own: [UFO_implementation, MadGraph_cross_sections, recast_efficiency, composed_limits]
++  dihiggs_ufo:
++    repository: fbientrigo/dihiggs_ufo
++    owns: [UFO_model_implementation, parameter_and_vertex_mapping, model_pack_validation]
++    does_not_own: [model_point_authority, MadGraph_cross_sections, recast_efficiency, composed_limits]
++  dihiggs_hep_cross:
++    repository: fbientrigo/dihiggs_hep_cross
++    owns: [MadGraph_execution, cross_sections, generator_cards, production_provenance]
++    does_not_own: [model_point_authority, recast_efficiency, composed_limits]
++  dihiggs_llp_recast:
++    repository: fbientrigo/dihiggs_llp_recast
++    owns: [recast_cutflows, acceptance, efficiency, response_provenance]
++    does_not_own: [model_point_authority, production_cross_sections, composed_limits]
++  dihiggs_boundary:
++    repository: fbientrigo/dihiggs_boundary
++    owns: [stage_composition, signal_yields, statistical_limits, boundary_products]
++    does_not_own: [upstream_model_quantities, UFO_implementation, MadGraph_cross_sections, recast_efficiency]
++
++migration:
++  pending_125p20_uses:
++    purpose: >-
++      Historical inventory retained for provenance. The active 125.20
++      convention is not a migration target.
++    required_before_new_production: false
++    discovery_rule: >-
++      Search exact convention token 125.20 in active code, configuration,
++      documentation, and tests. Do not classify unrelated longer numerical
++      values (for example detector geometry coordinates) as Higgs masses.
++    occurrences:
++      - repository: fbientrigo/dihiggs_ufo
++        path: docs/PHYSICAL_POINT_UFO_HANDOFF.md
++        kind: documentation
++        action: replace_false_PDG_attribution_and_link_v3
++      - repository: fbientrigo/dihiggs_ufo
++        path: pack_b/operator/build_model_derived.py
++        kind: historical_builder_comment
++        action: preserve_125p13_builder_and_replace_active_125p20_reference_with_v3
++      - repository: fbientrigo/dihiggs_hep_cross
++        path: conventions/physics_conventions.yaml
++        kind: controlled_cache
++        action: replace_with_byte_identical_v3_cache_and_provenance_sidecar
++      - repository: fbientrigo/dihiggs_hep_cross
++        path: src/llp_recast/constants.py
++        kind: active_code_default
++        action: replace_pinned_text_and_v3_loader_path
++      - repository: fbientrigo/dihiggs_hep_cross
++        path: scripts/run_mass_jet_control_campaign.py
++        kind: active_campaign_script
++        action: parameterize_or_adopt_active_v3_mass_with_explicit_provenance
++      - repository: fbientrigo/dihiggs_hep_cross
++        path: state/CURRENT_CAMPAIGN.yaml
++        kind: current_campaign_state
++        action: classify_as_frozen_125p20_campaign_or_regenerate_as_a_new_125p13_campaign
++      - repository: fbientrigo/dihiggs_hep_cross
++        path: docs/MH_CONVENTION.md
++        kind: documentation
++        action: replace_false_PDG_attribution_and_link_v3
++      - repository: fbientrigo/dihiggs_hep_cross
++        path: docs/CURRENT_DATA_AUTHORITY.md
++        kind: documentation
++        action: separate_data_authority_from_v3_physics_authority
++      - repository: fbientrigo/dihiggs_hep_cross
++        path: tests/test_constants.py
++        kind: regression_test
++        action: update_only_with_the_corresponding_constants_migration
++      - repository: fbientrigo/dihiggs_hep_cross
++        path: tests/test_run_physical_point_madgraph.py
++        kind: regression_test
++        action: label_125p20_cases_historical_or_update_new_production_fixture
++      - repository: fbientrigo/dihiggs_hep_cross
++        path: tests/test_madgraph_banner_verification.py
++        kind: regression_test
++        action: label_125p20_cases_historical_or_update_new_production_fixture
++  excluded_numeric_collision:
++    repository: fbientrigo/dihiggs_llp_recast
++    path: results/r8_h2_model_derived_4b/run_01/geometry.csv
++    reason: >-
++      Values such as 125.2024322162061 are geometry data, not an exact Higgs
++      mass convention token; preserve the frozen result unchanged.
++  downstream_copy:
++    authority: false
++    content_policy: byte_identical_cache
++    provenance_sidecar: conventions/physics_conventions.lock.yaml
++    required_sidecar_fields:
++      - source_repository
++      - source_commit
++      - source_path
++      - source_sha256
++      - schema_version
++      - copied_utc
++    checksum_algorithm: sha256
++    mismatch_action: reject
++    missing_provenance_action: reject
++  point_handoff:
++    required_fields: [physics_conventions_schema, physics_conventions_commit, physics_conventions_sha256]
++    missing_or_unknown_action: reject
++  historical_artifacts:
++    mutate_values: false
++    relabel_as_active: false
++    replay_requires_declared_historical_convention_id: true
++
++failure_policy:
++  default: reject
++  reject_when:
++    - ambiguous bare H identifies a state
++    - mass convention is absent or unknown
++    - Type-I basis is absent or differs
++    - a campaign choice is silently defaulted
++    - M2, m12_sq, or m22_sq are conflated
++    - a trilinear prescription is absent or unknown
++    - a required prescription input is absent
++    - an unresolved sign or UFO-vertex mapping is used in a sign-sensitive calculation
++    - the physical 2HDM trilinear is non-finite or has an unknown complex convention
++    - downstream convention provenance is absent or its checksum mismatches
+diff --git a/docs/CURRENT_DATA_AUTHORITY.md b/docs/CURRENT_DATA_AUTHORITY.md
+index 4d87d4c..07881aa 100644
+--- a/docs/CURRENT_DATA_AUTHORITY.md
++++ b/docs/CURRENT_DATA_AUTHORITY.md
+@@ -1,154 +1,30 @@
+-# Current Data Authority
++# Current data authority
+ 
+-This is the single file a human or an LLM agent should read before treating
+-any DiHiggs (2HDM Type-I) number as current. It exists because, as of
+-2026-08-31, this workspace was reset from a dirty, multi-campaign state where
+-several plausible-looking result sets coexisted with no single answer to
+-"which one is real right now." Read this alongside
+-[`state/CURRENT_CAMPAIGN.yaml`](../state/CURRENT_CAMPAIGN.yaml) (the
+-machine-readable form of the same contract) before citing a cross section,
+-benchmark point, or recast result as authoritative.
++This file governs which numerical results may be described as current. It is separate from the project-wide theory convention, whose owner is `dihiggs`; this repository keeps a controlled v3 cache at `conventions/physics_conventions.yaml` with provenance in `conventions/physics_conventions.lock.yaml`.
+ 
+-## 1. What is CURRENT
++## Current results
+ 
+-**CURRENT MadGraph results: NONE.** As of this reset, no MadGraph production
+-campaign has completed and been validated under the fresh physical_2HDM vs
+-PI_simplified coupling-comparison plan. `state/CURRENT_CAMPAIGN.yaml`'s
+-`madgraph.authoritative_results` is `null` and must stay `null` until a real
+-campaign finishes and is validated — do not set it just because a plausible
+-number exists somewhere in this workspace or its archive.
++**Authoritative MadGraph results: none.** `state/CURRENT_CAMPAIGN.yaml` must keep `madgraph.authoritative_results: null` until a campaign has completed and passed banner verification, coupling consistency, independent-seed agreement, manifest review, and explicit human acceptance. Setup or a successful run does not promote results.
+ 
+-**CURRENT non-MadGraph artifacts** (usable for current physics claims):
++The separately authorized, non-MadGraph high-mass validity artifact is `dihiggs/docs/campaigns/high_mass_h2_physical_point_scan_v2_mh12520/` from `dihiggs@ef241b6fae92aa0324ef736a613c19bf52bab03e`. Its authorization is limited to the 208 recalculated points' theoretical-validity and kinematic flags; it contains no production cross sections and authorizes neither new points nor new runs. It remains distinct from the MadGraph results registry above.
+ 
+-- The active 2HDM point evaluators in `dihiggs` (`DihiggsPointV2Evaluator`,
+-  `Lambda1EvaluatorV2`) and `dihiggs_boundary`'s handoff layer, at their
+-  respective `main` branch HEADs.
+-- The active mass convention: **m_h = 125.20 GeV**, established by
+-  `dihiggs_hep_cross` commit `53fb57e` ("Unify active mh convention to
+-  125.20 GeV"), `dihiggs_ufo` commit `7dd02c1`, and
+-  `dihiggs/conventions/physics_conventions.yaml`. Any benchmark point or
+-  result computed under a different m_h (125.13 GeV appears throughout the
+-  pre-reset history) is a **historical convention**, not an error, but must
+-  never be silently mixed with 125.20 GeV results in one table or plot.
+-- The 208-point recalculation at
+-  `dihiggs/docs/campaigns/high_mass_h2_physical_point_scan_v2_mh12520/`
+-  (commit `ef241b6`): point-*validity* data under the 125.20 GeV convention.
+-  This is theory acceptance/kinematics, **not a cross section** — it does not
+-  make any repo an authoritative source for current MadGraph numbers.
+-- `dihiggs_hep_cross/scripts/run_physical_point_madgraph.py`, the tracked
+-  per-point MadGraph production driver, and
+-  `scripts/madgraph_banner_verification.py`, the banner-authoritative
+-  verification module (see §6). Both are current *tooling*, not results.
++That exact directory is absent from the currently pinned `dihiggs@087ba246e9a9fa34b16249b52629a62703893b5c` checkout. Recover it from the recorded `ef241b6fae92aa0324ef736a613c19bf52bab03e` commit and verify its `checksums.sha256` before relying on the artifact. Pinned v3 tools are current tooling; their presence does not promote any output.
+ 
+-## 2. What is HISTORICAL
++The current theory convention for new production is the v3 authority identified by the cache sidecar: `m_h = "125.20"` GeV under `mh_125p20_active_2026`. It is a project convention, not a claim that the value is the PDG central value. New handoffs must carry the v3 schema, source commit, source SHA-256, explicit campaign choices, and coupling prescription.
+ 
+-Everything under `/home/fabian/atlas_dihiggs_archive/20260831_pre_madgraph_reset/`
+-is historical: `mission_runs/` (8 dated campaigns, Aug 12–28), `runs/` (8 more),
+-`search_runs/`, `_handoff_out/`, `presentations/`, `figures/`,
+-`meeting_signal_table/`, `operator/`, the embedded MadGraph_aMC v3.5.3 install,
+-and full git mirrors of all 6 repos (including branches never merged to main).
+-See `ARCHIVE_MANIFEST.tsv` and `DO_NOT_USE_FOR_CURRENT_PHYSICS.md` at the
+-archive root. Also historical: the archived campaign
+-`dihiggs_hep_cross-h2-llp-production/campaigns/h2_llp_production_300_330_345/`
+-(6/6 complete MadGraph runs for mH2=300/330/345 GeV) — a genuinely complete,
+-checksummed, well-documented result, dated pre-reset, and explicitly **not**
+-promoted to current per §5.
++## Historical and replay data
+ 
+-## 3. Supersession chain
++Artifacts generated with 125.13, 125.09, or 125.0 retain their original values and hashes. They are historical/replay inputs and cannot be relabeled as v3 production. The checked-in R9 mass-jet control and seed/threshold fixtures remain frozen; this migration does not regenerate them. Archived campaigns remain historical regardless of their completeness or timestamp.
+ 
+-```
+-2026-08-12  high_mass_e2e pilot                        (historical)
+-2026-08-21  boundary_benchmark_discovery               (historical)
+-2026-08-22  senior_review_meeting                       (historical)
+-2026-08-23  senior_review_validation                    (historical)
+-2026-08-25  h2_event_yields_v1                          (historical)
+-2026-08-26  h2_table_v2_requalification                 (historical)
+-2026-08-26  christopher_requalification                 (historical)
+-2026-08-27  benchmark_closure, coordinate_explainer,
+-            photon_rich_family_package                  (historical)
+-2026-08-28  x_path_dependence_scan                       (historical)
+-2026-08-31  THIS RESET -- workspace made unambiguous,
+-            no campaign promoted to current
+-------------------------------------------------------------------
+-[pending]   fresh physical_2HDM vs PI_simplified
+-            coupling-comparison campaign                (will become
+-                                                          CURRENT once
+-                                                          complete AND
+-                                                          validated)
+-```
++The root workspace's pinned `dihiggs` commit is the current convention source. Its separate result registry remains empty. Verify both this document and `state/CURRENT_CAMPAIGN.yaml` before making a numerical claim; never infer authority from a local file, branch, or timestamp.
+ 
+-None of the pre-reset campaigns supersede each other in a strict technical
+-sense (most cover different mass points or different questions); what they
+-share is that **none is current**. Do not infer "most recent timestamp wins."
++## Requirements for future MadGraph promotion
+ 
+-## 4. Directories agents may use for current numerical claims
++Before a result can be promoted, all of the following must be recorded and checked:
+ 
+-- `dihiggs/`, `dihiggs_boundary/`, `dihiggs_hep_cross/`, `dihiggs_llp_recast/`,
+-  `dihiggs_ufo/` at their tracked `main`-branch HEADs, for **methodology,
+-  evaluators, contracts, and tooling** — not for pre-existing numerical
+-  results found in `results/`, `artifacts/`, or `docs/pilots/*/` subtrees
+-  unless this file or `state/CURRENT_CAMPAIGN.yaml` names that specific
+-  artifact as current (as §1 does for the v2 point-validity recalculation).
+-- `dihiggs_ufo/` model directories, as the authoritative UFO for MadGraph
+-  generation. Never overwrite the original PI UFO; new prescriptions are
+-  added, not substituted in place.
++1. Banner agrees with the declared process, energy, masses, widths, and UFO parameter card.
++2. `GHphiphi` follows the declared prescription. For v3 `physical_2HDM`, the canonical signed mapping is `GHphiphi = -g_physical_hphiphi_GeV`; magnitude-only replay is marked historical.
++3. For two independent seeds, `compatible()` requires `abs(sigma_a - sigma_b) <= 3 * hypot(unc_a, unc_b)` (3σ agreement).
++4. A manifest records `mH2`, `GHphiphi`, prescription, process, collision energy, UFO identity, seed, banner/source artifact, and convention provenance; a human reviews and accepts it before `authoritative_results` changes.
+ 
+-## 5. Directories forbidden as current evidence
+-
+-- Anything under `/home/fabian/atlas_dihiggs_archive/`.
+-- Anything under the retired old container
+-  `/home/fabian/atlas_dihiggs/` (superseded by this clean container;
+-  retained only inside the archive's git mirrors and the archived loose
+-  trees, never as a live path).
+-- Any `mission_runs/`, `runs/`, or `search_runs/` directory anywhere,
+-  including ones that may reappear inside a repo's untracked working tree —
+-  treat any such directory found in an active checkout as scratch output to
+-  be archived, not read as data.
+-- Campaign or worktree material still living in a git worktree without
+-  having gone through this authority contract (e.g. a fresh worktree someone
+-  creates for exploratory work) — worktree output is not current just
+-  because it is newer than the archive.
+-
+-## 6. How a MadGraph result becomes authoritative
+-
+-In this order, all four required:
+-
+-1. **The banner is authoritative over any copied summary value.** Run
+-   `scripts/madgraph_banner_verification.py`'s `banner_checks()` /
+-   `checks_pass()` against the point that was supposedly generated. A sigma
+-   copied into a CSV without its banner passing this check is not usable.
+-2. **GHphiphi consistency.** The banner's `GHphiphi` value must equal
+-   `-abs(g_hH2H2_GeV)` for the point's declared coupling prescription (see
+-   §7) — this is exactly what `banner_checks()` verifies; a mismatch means
+-   the run used the wrong coupling, not just the wrong number.
+-3. **Seed agreement.** At least two independent seeds must agree within
+-   3-sigma (`madgraph_banner_verification.compatible()`); silent
+-   disagreement between seeds must block promotion, not average away.
+-4. **Manifest + validation.** The result is recorded in a campaign manifest
+-   naming `mH2`, `GHphiphi`, the coupling prescription, process, `sqrt(s)`,
+-   UFO identity, seed, and the banner/source artifact path (the same 8 fields
+-   `AGENTS.md` requires) — and a human (not an agent alone) has reviewed and
+-   accepted it — before `state/CURRENT_CAMPAIGN.yaml` is updated to point at
+-   it as `authoritative_results`.
+-
+-## 7. physical_2HDM vs PI_simplified
+-
+-Two distinct coupling prescriptions for the `g g > H > h2 h2` production
+-vertex, both declared in `state/CURRENT_CAMPAIGN.yaml`:
+-
+-- **`physical_2HDM`**: `GHphiphi` derived from the validated 2HDM benchmark
+-  point via the real evaluator chain (`DihiggsPointV2Evaluator` /
+-  `Lambda1EvaluatorV2` → `dihiggs_boundary` handoff →
+-  `run_physical_point_madgraph.py`'s `generate_param_card_text`, which writes
+-  `GHphiphi = -abs(g_hH2H2_GeV)`). This is the prescription every archived
+-  and current-tooling MadGraph run in this workspace has used so far.
+-- **`PI_simplified`**: a simplified production prescription,
+-  `GHphiphi = -8 * mH2^2 / v`. **As of this reset, this formula has no
+-  implementation anywhere in this workspace** (checked: not present in any
+-  of the 6 repos' source). It is a deliverable of the upcoming campaign, not
+-  an existing asset — do not assume it already exists or silently substitute
+-  the `physical_2HDM` value when asked for a `PI_simplified` result.
+-
+-Every cross section produced going forward must record which of the two
+-prescriptions it used; a number without that label is incomplete metadata
+-regardless of how it was obtained.
++The effective prescriptions `effective_mass_only` and `effective_m22_shifted` have unresolved UFO sign mappings in the authority. This repository does not treat them as implemented for sign-sensitive production.
+diff --git a/docs/MH_CONVENTION.md b/docs/MH_CONVENTION.md
+index 9eab622..7fbb68f 100644
+--- a/docs/MH_CONVENTION.md
++++ b/docs/MH_CONVENTION.md
+@@ -1,58 +1,7 @@
+-# SM-like Higgs mass convention in `dihiggs_hep_cross`
++# SM-like Higgs mass convention
+ 
+-## Owner
++The project-wide theory authority is owned by `dihiggs` at the source commit recorded in `conventions/physics_conventions.lock.yaml`. Its controlled cache is `conventions/physics_conventions.yaml`; validate the cache and sidecar with the workspace checker. The active new-production value is the exact decimal string `125.20` GeV under `mh_125p20_active_2026`. This is an adopted project convention, not an external-measurement attribution.
+ 
+-`m_h` has exactly one owner across the ecosystem:
+-`conventions/physics_conventions.yaml`, key `sm_like_higgs.m_h_GeV`, currently
+-`"125.20"` (PDG 2026 listing). The file is values-only and byte-identical across
+-`dihiggs`, `dihiggs_boundary` and `dihiggs_hep_cross`; `tests/test_external_tools.py`
+-md5-pins it so drift in any repo fails that repo's CI.
++New points must carry `physics_conventions_schema`, `physics_conventions_commit`, and `physics_conventions_sha256`, plus their mass and prescription metadata. The MadGraph driver rejects incomplete or mismatched v3 provenance. It uses the signed `g_physical_hphiphi_GeV` mapping from v3 for `physical_2HDM`; magnitude-only coupling is accepted only with an explicit historical convention ID and `historical_replay: true`.
+ 
+-This repo reads it through `src/llp_recast/constants.py`
+-(`M_H_GEV_TEXT` / `M_H_GEV`), pinned-fallback style, cross-asserted by
+-`tests/test_constants.py`.
+-
+-## Rule
+-
+-**Read `m_h` off the point. Never default it.**
+-
+-`scripts/run_physical_point_madgraph.py::resolve_m_h_GeV` resolves
+-`m_h_GeV` -> `mh_input_GeV` -> `mh` from the incoming point and raises if none is
+-present. It used to fall back to a hard-coded `125.13`, which meant a point
+-produced under a different mass convention was silently rewritten to this repo's
+-assumption when its `param_card.dat` was generated. The convention travels on the
+-point; a point that does not carry it is a contract violation, not a defaulting
+-case.
+-
+-`constants.M_H_GEV` is only for code that generates *new* points and therefore
+-has no point to read from (e.g. `scripts/run_scale_campaign.py`, which drives the
+-evaluator directly).
+-
+-## Active sites
+-
+-| Site | Role |
+-|---|---|
+-| `src/llp_recast/constants.py` | reads the convention (`M_H_GEV`, `M_H_GEV_TEXT`) |
+-| `scripts/run_physical_point_madgraph.py` | reads `m_h` off the point; writes SLHA `Block MASS` entry 25 |
+-| `scripts/run_scale_campaign.py` | generates new points at the canonical convention |
+-| `contracts/model_point_to_llp_recast*.yaml` | the v2 contract carries `m_h_GeV` as a required column |
+-
+-## Historical / frozen sites — deliberately NOT migrated
+-
+-| Site | Value | Why |
+-|---|---|---|
+-| `scripts/r9_run_model_scan.py` (`MH_GEV = 125.13`) | 125.13 | **sha256-locked frozen artifact.** Its hash is pinned in `results/r9_h2_sensitivity_threshold/artifact_manifest.json` and enforced by `scripts/verify_r9_artifacts.py` / `tests/test_r9_artifacts.py`. It is the frozen reconstruction of benchmark `H2scan_mH150_tb300000`. Editing the file at all — even to add a comment — breaks the lock. Its historical status is recorded here instead. |
+-| `results/canonical_benchmark_point.json` (`mh_input_GeV: 125.13`) | 125.13 | the validated 150 GeV benchmark point as produced |
+-| `results/pilot_points_input.json` | 125.13 | generated pilot data |
+-| `data/manual/h2_benchmark_handoff.json` (`ufo.external_defaults.MH: 125.0`) | 125.0 | a *record* of the un-patched upstream UFO default, not a convention |
+-| `tests/test_run_physical_point_madgraph.py` benchmark cases | 125.13 | exact regression of the 150 GeV closure; `mh_GeV` now has no default, so the historical value is necessarily explicit |
+-
+-Recalculating the 150 GeV benchmark at 125.20 shifts `g_hH2H2` by roughly
+-+0.11% and changes its `point_id` (`m_h` is hashed into the canonical point
+-identity). Such a point is a **different point**, not a relabelling. Do not mix
+-results across conventions in a single plot or table.
+-
+-## False positives
+-
+-`data/hepdata/atlas_dvjets_139fb/yaml_raw/*` contains `125.02`, `125.03`,
+-`125.07` — these are ATLAS exclusion-curve values, not Higgs masses.
++The 125.13, 125.09, and 125.0 fixtures, campaigns, and frozen scripts retain their original bytes and convention IDs for replay. They are not new-production defaults. In particular, locked R9 inputs and historical MadGraph banners must not be regenerated or relabeled during this migration.
+diff --git a/docs/WORKSPACE_MAP.md b/docs/WORKSPACE_MAP.md
+index d7930dd..60ae7c3 100644
+--- a/docs/WORKSPACE_MAP.md
++++ b/docs/WORKSPACE_MAP.md
+@@ -1,101 +1,9 @@
+-# DiHiggs Analysis Workspace Map
++# Workspace map moved
+ 
+-## Workspace Overview & Data Authority Rule
++The versioned global workspace map is maintained at [`../../docs/WORKSPACE_MAP.md`](../../docs/WORKSPACE_MAP.md)
++from the workspace root. Read the [global onboarding guide](../../docs/ONBOARDING.md)
++for setup and the complete six-repository workflow.
+ 
+-This workspace is a DiHiggs (Two-Higgs-Doublet Model Type-I) particle physics analysis environment constructed from 6 independent Git repositories, vendored C++ physics libraries ([`2HDMC-1.8.0`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_boundary/lib/2HDMC-1.8.0) and [`higgstools-v1.2`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_boundary/lib/higgstools-v1.2)), and a dedicated MadGraph5_aMC@NLO event generator installation. As part of a comprehensive workspace reset, the historical container at `/home/fabian/atlas_dihiggs` is retired, all historical campaign outputs and pilot runs are archived to `/home/fabian/atlas_dihiggs_archive/20260831_pre_madgraph_reset/`, and a fresh, clean container is provisioned at `/home/fabian/atlas_dihiggs_clean/` containing solely canonical repository checkouts from `origin/main` with zero unreviewed generated output.
+-
+-> [!IMPORTANT]
+-> **Cardinal Authority Rule:** Before citing any cross-section, event yield, branching ratio, exclusion limit, or sensitivity number as current, any agent or researcher MUST first inspect [`dihiggs_hep_cross/docs/CURRENT_DATA_AUTHORITY.md`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_hep_cross/docs/CURRENT_DATA_AUTHORITY.md) and [`dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml); no other file, script, run directory, or historical report carries authority for current scientific claims.
+-
+----
+-
+-## Workspace Path Map & Authority Matrix
+-
+-| Path | Role | Generates | Consumes | Tracked? | Current authority? | Safe for LLM current claims? |
+-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+-| `dihiggs_clean/dihiggs/` | Canonical 2HDM theory point evaluators and scan core | 2HDM point evaluation tables, decay widths, BRs, `ctau_mm`, theoretical validity flags | Model parameter points, scan grid configurations | YES | NO | NO |
+-| `dihiggs_clean/dihiggs_boundary/` | Boundary and handoff layer between theory evaluators and ATLAS interpretation | Enriched boundary datasets, visible cross sections ($\sigma_{\text{visible}}$), expected yields ($N_{\text{exp}}$) | Evaluator points (`dihiggs.point.v2`), MadGraph production cross sections, LLP response maps | YES | NO | NO |
+-| `dihiggs_clean/dihiggs_boundary/lib/2HDMC-1.8.0/` | Vendored C++ 2HDMC physics calculation library | Compiled static/shared libraries for 2HDM tree-level decay widths and theory constraints | C++ source, compiler configuration | NO | NO | NO |
+-| `dihiggs_clean/dihiggs_boundary/lib/higgstools-v1.2/` | Vendored C++ HiggsTools (HiggsBounds + HiggsSignals) library | Compiled experimental Higgs exclusion limits and signal likelihood evaluations | Experimental limit tables, Higgs couplings | NO | NO | NO |
+-| `dihiggs_clean/dihiggs_hep_cross/` | MadGraph production driver, cross-section ingestion, and campaign data-authority registry | Cross sections ($\sigma_{\text{prod}}$), MadGraph cards, LHE event samples, data-authority specifications | UFO model files, 2HDM benchmark parameters, run cards | YES | NO | NO |
+-| `dihiggs_clean/dihiggs_hep_cross/scripts/` | MadGraph generation driver ([`run_physical_point_madgraph.py`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_hep_cross/scripts/run_physical_point_madgraph.py)) and ingestion tooling | Generated process directories, cross-section CSVs, run logs | UFO models, param cards, run configurations | YES | NO | NO |
+-| `dihiggs_clean/dihiggs_hep_cross/docs/` | Cross-section documentation, process regeneration guides, and authority specifications | Documentation, contract specifications, process notes | Analysis results, workflow specifications | YES | NO | NO |
+-| `dihiggs_clean/dihiggs_hep_cross/docs/CURRENT_DATA_AUTHORITY.md` | Single authoritative data-authority contract governing valid scientific claim sources | Rules defining authoritative vs non-authoritative results, citation prerequisites | Campaign status metadata | YES | YES | YES (defines validity rules; currently declares no active campaign) |
+-| `dihiggs_clean/dihiggs_hep_cross/state/` | Campaign state registry and active data pointer directory | Machine-readable campaign registry metadata | Campaign manifests, execution logs | YES | NO | NO |
+-| `dihiggs_clean/dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml` | Active campaign pointer and authoritative dataset registry file | Identification of currently active authoritative campaign, baseline parameters, and lock state | Validated campaign manifests | YES | YES | YES (registry pointer; currently states no active campaign post-reset) |
+-| `dihiggs_clean/dihiggs_llp_recast/` | ATLAS displaced-vertex plus jets LLP recasting and response modeling (`dvrecast`) | Detector acceptance and efficiency maps ($A_{\text{eff}}$), cutflows, response curves | LHE/Pythia event samples, analysis card definitions | YES | NO | NO |
+-| `dihiggs_clean/dihiggs_ufo/` | Authoritative UFO model repository, packaging, and validation suites | Verified UFO model archives (`Pack A`, `Pack AA`), decay mechanics, validation reports | FeynRules source exports, Pythia decay configurations | YES | NO | NO |
+-| `dihiggs_clean/dihiggs_ufo/models/` | Sensitive, immutable UFO model source directories consumed by MadGraph (`releases/pack_a/`, `pack_aa/`) | Validated UFO parameter cards, vertices, couplings | Theoretical model parameters | YES | NO | NO |
+-| `dihiggs_clean/recast_viewer/` | Static web viewer and pedagogical explorer for ATLAS LLP recast results | Preprocessed JSON datasets, static HTML/JS web bundle | Recast LHE inputs, event telemetry, cutflow summaries | YES | NO | NO |
+-| `.venv/` | Local Python virtual environments across repos | Installed Python packages, executable CLI wrappers | Project `pyproject.toml`, `requirements.txt` | NO | NO | NO |
+-| `__pycache__/` | Python bytecode cache across repos | Compiled `.pyc` bytecode files | Python source `.py` files | NO | NO | NO |
+-| `.pytest_cache/` | Pytest test execution cache across repos | Test outcome cache, failure tracking state | Test execution runs | NO | NO | NO |
+-| `/home/fabian/atlas_dihiggs_archive/20260831_pre_madgraph_reset/` | Historical pre-reset archive root storing all superseded runs, pilots, and campaign outputs | Preserved historical scientific provenance, checksummed artifacts | Archived workspace state | NO | NO | NO |
+-
+----
+-
+-## Core Repositories and Physics Libraries
+-
+-### 1. `dihiggs`
+-**WHAT IT IS:** C++ and Python core implementing canonical 2HDM theory evaluators ([`DihiggsPointV2Evaluator`](file:///home/fabian/atlas_dihiggs_clean/dihiggs/src/DihiggsPointV2Evaluator.cpp), [`Lambda1EvaluatorV2`](file:///home/fabian/atlas_dihiggs_clean/dihiggs/src/Lambda1EvaluatorV2.cpp)), parameter grid scans, and a benchmark search daemon.  
+-**WHY IT EXISTS:** Owns theoretical 2HDM parameter-point construction, stability predicates (positivity, unitarity, perturbativity), decay widths, branching ratios, and lifetime calculation (`ctau_mm`) without coupling to detector response or cross-section generation.  
+-**SHOULD AGENTS READ IT:** Yes, agents working on 2HDM parameter space definition, point validity criteria, or scan mechanics should read its contract documentation ([`canonical_evaluators_v2.md`](file:///home/fabian/atlas_dihiggs_clean/dihiggs/docs/contracts/canonical_evaluators_v2.md)), but they must never cite raw evaluator outputs as final physical yields.
+-
+-### 2. `dihiggs_boundary`
+-**WHAT IT IS:** Python integration package (`dhb`) that enriches theoretical 2HDM points with HiggsBounds/HiggsSignals exclusion checks and combines them with external LLP response maps and direct production cross sections.  
+-**WHY IT EXISTS:** Serves as the boundary and handoff layer between theoretical model evaluation and ATLAS experimental interpretation, calculating visible cross sections ($\sigma_{\text{visible}} = \sigma_{\text{prod}} \times \text{BR}^2 \times A_{\text{eff}}$) and expected event yields without recalculating 2HDM physics or running MadGraph internally.  
+-**SHOULD AGENTS READ IT:** Yes, agents should read its integration contracts ([`llp_signal_contract.md`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_boundary/docs/llp_signal_contract.md), [`boundary_atlas_v1_contract.md`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_boundary/docs/boundary_atlas_v1_contract.md)) when assembling boundary datasets or interpreting signal yields.
+-
+-### 3. `2HDMC-1.8.0`
+-**WHAT IT IS:** Vendored and built C++ library for calculating Two-Higgs-Doublet Model tree-level decay widths, theoretical validity constraints, and loop corrections.  
+-**WHY IT EXISTS:** Supplies the underlying C++ physics calculation engine compiled under [`dihiggs_boundary/lib/2HDMC-1.8.0/`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_boundary/lib/2HDMC-1.8.0) and used by boundary evaluation routines.  
+-**SHOULD AGENTS READ IT:** No, agents should treat it as an external compiled dependency and interact solely through the Python/C++ interfaces in `dihiggs` and `dihiggs_boundary`.
+-
+-### 4. `higgstools-v1.2`
+-**WHAT IT IS:** Vendored and built C++ framework (per its own README, "a complete rewrite and unification of HiggsBounds-5 and HiggsSignals-2 in modern C++") incorporating experimental Higgs exclusion limit databases and $\chi^2$ likelihood calculations.  
+-**WHY IT EXISTS:** Determines whether specific 2HDM parameter points are excluded by LEP, Tevatron, and LHC searches or remain consistent with observed 125 GeV Higgs boson measurements.  
+-**SHOULD AGENTS READ IT:** No, agents should treat it as a compiled third-party physics library and invoke it via `dihiggs_boundary` enrichment scripts rather than inspecting its internal C++ source.
+-
+-### 5. `dihiggs_hep_cross`
+-**WHAT IT IS:** Production orchestration repository containing MadGraph run drivers ([`run_physical_point_madgraph.py`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_hep_cross/scripts/run_physical_point_madgraph.py)), cross-section ingestion pipelines, and the workspace data-authority contract files ([`CURRENT_DATA_AUTHORITY.md`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_hep_cross/docs/CURRENT_DATA_AUTHORITY.md), [`CURRENT_CAMPAIGN.yaml`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml)).  
+-**WHY IT EXISTS:** Executes heavy MadGraph5_aMC@NLO matrix-element cross-section generation and acts as the sole authoritative registry defining which simulation campaigns and numbers are currently valid.  
+-**SHOULD AGENTS READ IT:** Yes, this is mandatory reading: every agent must check [`docs/CURRENT_DATA_AUTHORITY.md`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_hep_cross/docs/CURRENT_DATA_AUTHORITY.md) and [`state/CURRENT_CAMPAIGN.yaml`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml) before citing or using any cross-section, yield, or sensitivity value.
+-
+-### 6. `dihiggs_llp_recast`
+-**WHAT IT IS:** Recasting framework wrapping the public ATLAS displaced-vertex plus jets search (`ATLAS-SUSY-2018-13`) via the `dvrecast` package and external recasting submodules.  
+-**WHY IT EXISTS:** Evaluates ATLAS detector acceptance and efficiency maps ($A \times \epsilon$) for long-lived scalar decays ($H_2 \to b\bar{b}$) across lifetime and kinematic benchmarks.  
+-**SHOULD AGENTS READ IT:** Yes, agents working on detector response, displaced vertex efficiencies, or recasting contracts should read its documentation ([`docs/CANONICAL_TRACKLESS_STATUS_20260807.md`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_llp_recast/docs/CANONICAL_TRACKLESS_STATUS_20260807.md)), ensuring they distinguish the frozen published Trackless analysis from exploratory modified selections.
+-
+-### 7. `dihiggs_ufo`
+-**WHAT IT IS:** Authoritative repository housing Universal FeynRules Output (UFO) model files (e.g., `Pack A`, `Pack AA`), Pythia decay configurations, and Monte Carlo integration stability studies.  
+-**WHY IT EXISTS:** Serves as the immutable physics-model source consumed by MadGraph, maintaining cryptographic SHA-256 checksums and verification suites to prevent silent model corruption.  
+-**SHOULD AGENTS READ IT:** Yes, agents modifying model parameters or verifying vertex couplings should inspect [`ARTIFACT_REGISTRY.json`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_ufo/ARTIFACT_REGISTRY.json) and [`README.md`](file:///home/fabian/atlas_dihiggs_clean/dihiggs_ufo/README.md), but they must never edit frozen releases in place.
+-
+-### 8. `recast_viewer`
+-**WHAT IT IS:** Web frontend and preprocessing pipeline for interactive 3D and 2D visualization of ATLAS displaced-vertex events, cutflows, and counterfactual selections.  
+-**WHY IT EXISTS:** Provides pedagogical and diagnostic visual inspection of reconstructed tracks, displaced vertices, and jet selections for reference and $H_2$ benchmark events without executing heavy simulations.  
+-**SHOULD AGENTS READ IT:** Optional; agents interested in event display schemas, pedagogical presentation, or frontend cutflow verification can read its contracts, but it does not generate primary physics numbers.
+-
+----
+-
+-## What is NOT in this table
+-
+-The historical scientific outputs, intermediate runs, and legacy artifacts listed below have been retired from the active container and relocated to the archive root at `/home/fabian/atlas_dihiggs_archive/20260831_pre_madgraph_reset/`:
+-
+-- `mission_runs/`: Eight dated mission directories containing raw event cross sections, yields, reviews, and handoffs from historical campaign milestones.
+-- `runs/`: Eight campaign directories holding multi-phase scan points, boundary refinements, and validation tables.
+-- `search_runs/`: Diagnostic, dry-run, Monte Carlo, nightly, and smoke search directories superseded by newer structured campaigns.
+-- `_handoff_out/`: Frozen delivery snapshots of coordinate-explainer and document-integration tables, plots, and manifests.
+-- `presentations/`: Dated collaboration presentation slides, rendered Markdown/HTML decks, figures, and build scripts.
+-- `figures/`: Rendered PDF, PNG, and SVG diagnostic plots from past recast and cross-section studies.
+-- `meeting_signal_table/`: Benchmark yield tables, closure reports, and review packages created for historical collaboration meetings.
+-- `operator/`: Standalone physical-search operator code and tests migrated into canonical repository modules.
+-- MadGraph_aMC v3.5.3 install tree: 167MB standalone generator installation, process directories, and pre-compiled libraries.
+-- Git full-history mirrors: Full mirror bundles of all 6 repositories preserving all historical and unmerged feature branches.
+-- `graphify-out/`: Regenerable code-knowledge-graph visual cache, index summaries, and query memories.
+-- Scratch and temporary files: Ephemeral scratch CSVs in `tmp/`, empty placeholder files, and container root logs.
+-
+-For a complete cryptographic inventory of every archived file, refer to `ARCHIVE_MANIFEST.tsv` in the archive root (cataloged in [`SCIENTIFIC_ARTIFACT_INDEX.tsv`](file:///home/fabian/atlas_dihiggs_cleanup_20260831/SCIENTIFIC_ARTIFACT_INDEX.tsv) and [`WORKSPACE_INVENTORY.tsv`](file:///home/fabian/atlas_dihiggs_cleanup_20260831/WORKSPACE_INVENTORY.tsv)).
+-
+-> [!CAUTION]
+-> For every item in the archive: `current_use_allowed = NO`. Archived data must never be cited or used as current scientific evidence.
++This repository remains authoritative for MadGraph production, data contracts,
++and current-campaign status; see [`CURRENT_DATA_AUTHORITY.md`](CURRENT_DATA_AUTHORITY.md)
++and [`../state/CURRENT_CAMPAIGN.yaml`](../state/CURRENT_CAMPAIGN.yaml).
+diff --git a/external_tools.lock.yaml b/external_tools.lock.yaml
+index db026fc..8c7d16b 100644
+--- a/external_tools.lock.yaml
++++ b/external_tools.lock.yaml
+@@ -5,7 +5,7 @@
+ # versions each repo builds against, so version drift is detectable instead of
+ # hidden in directory names and build scripts. The declared versions must AGREE
+ # across the three manifests -- that agreement is the cross-repo "version pin".
+-# tests/test_external_tools.py enforces the versions and the conventions md5.
++# tests/test_external_tools.py enforces the versions and the convention-cache SHA-256 and provenance sidecar.
+ #
+ # This repo is the LLP-recast layer: it vendors NEITHER 2HDMC nor HiggsTools.
+ # It still declares the expected versions so a model point handed to it from
+@@ -13,12 +13,13 @@
+ # tool versions (vendored_path is null here).
+ schema_version: external_tools_v1
+ 
+-# Shared physics conventions file, byte-identical across all three repos.
+-# The md5 is the cross-repo drift pin for conventions/physics_conventions.yaml.
++# Controlled cache of the canonical physics convention file.
++# The SHA-256 pins the canonical v3 convention cache; provenance is in its sidecar.
+ conventions:
+   file: conventions/physics_conventions.yaml
+-  schema_version: physics_conventions_v2
+-  md5: 5a2e880a7c36a6aecf2a99e18cab4d44
++  provenance_file: conventions/physics_conventions.lock.yaml
++  schema_version: physics_conventions_v3
++  sha256: 4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6
+ 
+ tools:
+   2HDMC:
+diff --git a/scripts/madgraph_banner_verification.py b/scripts/madgraph_banner_verification.py
+index f1854fb..ea049af 100644
+--- a/scripts/madgraph_banner_verification.py
++++ b/scripts/madgraph_banner_verification.py
+@@ -28,6 +28,8 @@ import re
+ from pathlib import Path
+ from typing import Any, Dict
+ 
++from run_physical_point_madgraph import resolve_ghphiphi_GeV, resolve_point_masses_GeV
++
+ 
+ def banner_checks(banner_path: Path, point: Dict[str, Any]) -> Dict[str, bool]:
+     """Verify a MadGraph banner is internally consistent with the point it
+@@ -43,9 +45,8 @@ def banner_checks(banner_path: Path, point: Dict[str, Any]) -> Dict[str, bool]:
+     SM-like Higgs and H2 masses, the mediator width, and -- the check with no
+     prior tracked-source equivalent -- that the banner's GHphiphi coupling
+     matches the point's coupling-prescription value with the sign convention
+-    ``GHphiphi = -abs(g_hH2H2_GeV)`` (see run_physical_point_madgraph.py's
+-    ``generate_param_card_text``, which writes the card with this same
+-    convention).
++    ``GHphiphi = -g_physical_hphiphi_GeV`` for v3 physical points. Explicit
++    historical replay points retain the former magnitude mapping.
+     """
+     text = banner_path.read_text(encoding="utf-8", errors="replace")
+ 
+@@ -53,11 +54,18 @@ def banner_checks(banner_path: Path, point: Dict[str, Any]) -> Dict[str, bool]:
+         match = re.search(pattern, text, re.I | re.M)
+         return float(match.group(1)) if match else float("nan")
+ 
+-    mh_GeV = float(point.get("mh_input_GeV", point.get("mh_GeV")))
+-    mH2_GeV = float(point.get("mH_input_GeV", point.get("mH2_GeV")))
+-    expected_g = -abs(float(point["g_hH2H2_GeV"]))
++    try:
++        mh_GeV, mH2_GeV = resolve_point_masses_GeV(point)
++        expected_g = resolve_ghphiphi_GeV(point)
++        convention_ok = True
++    except (KeyError, TypeError, ValueError):
++        mh_GeV = float("nan")
++        mH2_GeV = float("nan")
++        expected_g = float("nan")
++        convention_ok = False
+ 
+     return {
++        "convention_provenance": convention_ok,
+         "process": bool(re.search(r"^generate g g > H > h2 h2\s*$", text, re.M)),
+         "sqrt_s_13_TeV": number(r"^\s*([\d.eE+\-]+)\s*=\s*ebeam1") == 6500.0
+         and number(r"^\s*([\d.eE+\-]+)\s*=\s*ebeam2") == 6500.0,
+diff --git a/scripts/run_mass_jet_control_campaign.py b/scripts/run_mass_jet_control_campaign.py
+index 890882e..3f9e349 100755
+--- a/scripts/run_mass_jet_control_campaign.py
++++ b/scripts/run_mass_jet_control_campaign.py
+@@ -55,13 +55,23 @@ HEP_CROSS_ROOT = WORKSPACE_ROOT / "dihiggs_hep_cross"
+ RECAST_ROOT = WORKSPACE_ROOT / "dihiggs_llp_recast"
+ UFO_ROOT = WORKSPACE_ROOT / "dihiggs_ufo"
+ 
++sys.path.insert(0, str(HEP_CROSS_ROOT / "src"))
+ sys.path.insert(0, str(RECAST_ROOT / "src"))
+ sys.path.insert(0, str(RECAST_ROOT / "scripts"))
++from llp_recast import constants as physics_constants  # noqa: E402
+ from dvrecast.r8_cutflow import parse_recast_log, combine_runs, RecastRunResult  # noqa: E402
+ from dvrecast.r8_geometry import load_geometry_csv, GeometrySample, summarize  # noqa: E402
+ from relabel_lhe_pdg import relabel  # noqa: E402
+ 
+-ACTIVE_MH_CONVENTION_GEV = 125.20
++ACTIVE_MH_CONVENTION_TEXT = physics_constants.M_H_GEV_TEXT
++ACTIVE_MH_CONVENTION_GEV = physics_constants.M_H_GEV
++PHYSICS_CONVENTION_PROVENANCE = {
++    "schema": "physics_conventions_v3",
++    "source_commit": "087ba246e9a9fa34b16249b52629a62703893b5c",
++    "source_sha256": "4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6",
++    "mass_convention_id": "mh_125p20_active_2026",
++    "m_h_GeV_text": ACTIVE_MH_CONVENTION_TEXT,
++}
+ CONTROL_CTAU_MM = 30.0
+ CORE_MASSES = [150.0, 250.0, 350.0, 500.0, 800.0]
+ EXTENDED_MASSES = [200.0, 300.0, 400.0]
+@@ -797,6 +807,7 @@ def build_final_reports(
+         "campaign_id": campaign_id,
+         "status": status,
+         "active_mh_convention_GeV": ACTIVE_MH_CONVENTION_GEV,
++        "physics_convention_provenance": PHYSICS_CONVENTION_PROVENANCE,
+         "control_definition": {
+             "decay": "H2 -> bb (forced)",
+             "ctau_mm": CONTROL_CTAU_MM,
+@@ -918,6 +929,7 @@ def run_campaign(
+         "campaign_id": campaign_id,
+         "created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+         "active_mh_convention_GeV": ACTIVE_MH_CONVENTION_GEV,
++        "physics_convention_provenance": PHYSICS_CONVENTION_PROVENANCE,
+         "control_ctau_mm": CONTROL_CTAU_MM,
+         "core_masses": CORE_MASSES,
+         "extended_masses": EXTENDED_MASSES,
+diff --git a/scripts/run_physical_point_madgraph.py b/scripts/run_physical_point_madgraph.py
+index ed2a9a2..fadd90e 100644
+--- a/scripts/run_physical_point_madgraph.py
++++ b/scripts/run_physical_point_madgraph.py
+@@ -41,6 +41,84 @@ DEFAULT_SEEDS = [101, 107]
+ DEFAULT_NEVENTS = 10000
+ FB_PER_PB = 1000.0
+ 
++PHYSICS_CONVENTIONS_SCHEMA = "physics_conventions_v3"
++PHYSICS_CONVENTIONS_COMMIT = "087ba246e9a9fa34b16249b52629a62703893b5c"
++PHYSICS_CONVENTIONS_SHA256 = "4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6"
++_HISTORICAL_MASS_CONVENTIONS = {
++    "mh_125p13_pdg_2026_historical_replay",
++    "mh_125p13_high_mass_v1",
++    "mh_125p09_lambda1_boundary_legacy",
++    "mh_125p0_ufo_autoresearch_legacy",
++}
++
++def _mass_convention(point: Dict[str, Any]) -> Dict[str, Any]:
++    nested = point.get("mass_convention")
++    return nested if isinstance(nested, dict) else point
++
++
++def _v3_provenance_state(point: Dict[str, Any]) -> tuple[bool, bool]:
++    nested = _mass_convention(point)
++    values = (
++        point.get("physics_conventions_schema", nested.get("schema_version")),
++        point.get("physics_conventions_commit", nested.get("source_commit")),
++        point.get("physics_conventions_sha256", nested.get("source_sha256")),
++    )
++    present = any(value is not None for value in values)
++    valid = values == (
++        PHYSICS_CONVENTIONS_SCHEMA,
++        PHYSICS_CONVENTIONS_COMMIT,
++        PHYSICS_CONVENTIONS_SHA256,
++    )
++    return present, valid
++
++
++def resolve_ghphiphi_GeV(point: Dict[str, Any]) -> float:
++    """Resolve the UFO parameter using v3's signed physical mapping.
++
++    Magnitude-only input is accepted only for explicitly identified historical
++    replay points; it cannot silently enter the new-production path.
++    """
++    has_provenance, valid_provenance = _v3_provenance_state(point)
++    nested = _mass_convention(point)
++    if has_provenance:
++        if not valid_provenance:
++            raise ValueError("v3 physics convention provenance is incomplete or mismatched")
++        if point.get("coupling_prescription") != "physical_2HDM":
++            raise ValueError("v3 production currently supports only physical_2HDM coupling")
++        mass_id = point.get("mass_convention_id", nested.get("convention_id"))
++        mass_text = point.get("m_h_GeV_text", nested.get("m_h_GeV_text"))
++        if mass_id != "mh_125p20_active_2026" or str(mass_text) != "125.20":
++            raise ValueError("v3 new production requires active convention id and decimal m_h text 125.20")
++        try:
++            signed = float(point["g_physical_hphiphi_GeV"])
++            magnitude = float(point["g_physical_hphiphi_abs_GeV"])
++            compatibility_magnitude = float(point["g_hH2H2_GeV"])
++            raw_real = float(point["two_hdmc_hphiphi_real_GeV"])
++            raw_imag = float(point["two_hdmc_hphiphi_imag_GeV"])
++        except (KeyError, TypeError, ValueError) as exc:
++            raise ValueError("v3 physical coupling fields are incomplete") from exc
++        scale = max(1.0, abs(signed), abs(magnitude), abs(raw_imag))
++        if (
++            not all(math.isfinite(value) for value in (signed, magnitude, compatibility_magnitude, raw_real, raw_imag))
++            or magnitude <= 0
++            or not math.isclose(magnitude, abs(signed), rel_tol=1e-9, abs_tol=1e-12)
++            or not math.isclose(compatibility_magnitude, magnitude, rel_tol=1e-9, abs_tol=1e-12)
++            or not math.isclose(raw_imag, -signed, rel_tol=1e-9, abs_tol=1e-12)
++            or abs(raw_real) > 1e-12 * scale
++        ):
++            raise ValueError("v3 physical coupling fields are inconsistent with the declared convention")
++        return -signed
++
++    convention_id = point.get("mass_convention_id") or point.get("convention_id")
++    if point.get("historical_replay") is True and convention_id in _HISTORICAL_MASS_CONVENTIONS:
++        value = point.get("g_hH2H2_GeV", point.get("g"))
++        if value is None or not math.isfinite(float(value)) or float(value) <= 0:
++            raise ValueError("historical replay requires a positive finite magnitude coupling")
++        return -abs(float(value))
++    raise ValueError(
++        "new production requires complete physics_conventions_v3 provenance and signed coupling fields; "
++        "magnitude-only input requires an explicit historical convention and historical_replay=true"
++    )
+ 
+ def sha256_file(path: Path) -> str:
+     """Compute sha256 of a file."""
+@@ -64,6 +142,37 @@ def format_slha_float(value: float) -> str:
+ M_H_FIELD_ALIASES = ("m_h_GeV", "mh_input_GeV", "mh")
+ 
+ 
++def _resolve_numeric_aliases(
++    point: Dict[str, Any], canonical: str, aliases: Tuple[str, ...], *, require_canonical: bool = False
++) -> float:
++    present: List[Tuple[str, float]] = []
++    for key in (canonical, *aliases):
++        raw = point.get(key)
++        if raw is None or (isinstance(raw, str) and not raw.strip()):
++            continue
++        if isinstance(raw, bool):
++            raise ValueError(f"point field {key} must be a finite number")
++        try:
++            value = float(raw)
++        except (TypeError, ValueError) as exc:
++            raise ValueError(f"point field {key} must be a finite number") from exc
++        if not math.isfinite(value):
++            raise ValueError(f"point field {key} must be a finite number")
++        present.append((key, value))
++    if not present:
++        raise KeyError(
++            f"point {point.get('point_id', '<unknown>')!r} carries no {canonical}; "
++            f"expected {', '.join((canonical, *aliases))}"
++        )
++    if require_canonical and present[0][0] != canonical:
++        raise KeyError(f"new v3 production requires canonical point field {canonical}")
++    selected = present[0][1]
++    for key, value in present[1:]:
++        if not math.isclose(value, selected, rel_tol=1e-12, abs_tol=1e-15):
++            raise ValueError(f"point aliases for {canonical} disagree ({present[0][0]} vs {key})")
++    return selected
++
++
+ def resolve_m_h_GeV(point: Dict[str, Any]) -> float:
+     """Read the SM-like Higgs mass off the canonical point.
+ 
+@@ -74,17 +183,40 @@ def resolve_m_h_GeV(point: Dict[str, Any]) -> float:
+     (conventions/physics_conventions.yaml) and travels on the point; a point
+     that does not carry it is a contract violation, not a defaulting case.
+     """
+-    for key in M_H_FIELD_ALIASES:
+-        if key in point and point[key] is not None and str(point[key]).strip() != "":
+-            return float(point[key])
+-    raise KeyError(
+-        "point %r carries no SM-like Higgs mass; expected one of %s. "
+-        "The mass convention is not defaulted here -- it must come from the "
+-        "point (see conventions/physics_conventions.yaml)."
+-        % (point.get("point_id", "<unknown>"), ", ".join(M_H_FIELD_ALIASES))
++    return _resolve_numeric_aliases(
++        point, M_H_FIELD_ALIASES[0], M_H_FIELD_ALIASES[1:]
++    )
++
++
++def resolve_m_phi_GeV(point: Dict[str, Any], *, require_canonical: bool = False) -> float:
++    """Resolve the additional scalar mass, checking every supplied alias."""
++    return _resolve_numeric_aliases(
++        point,
++        "m_phi_GeV",
++        ("mH_input_GeV", "mH2_GeV", "mH"),
++        require_canonical=require_canonical,
+     )
+ 
+ 
++def resolve_point_masses_GeV(point: Dict[str, Any]) -> Tuple[float, float]:
++    """Resolve and validate both masses against the point's convention state."""
++    has_provenance, valid_v3 = _v3_provenance_state(point)
++    if has_provenance and not valid_v3:
++        raise ValueError("v3 physics convention provenance is incomplete or mismatched")
++    is_v3 = has_provenance
++    if is_v3:
++        mh = _resolve_numeric_aliases(point, "m_h_GeV", ("mh_input_GeV", "mh"), require_canonical=True)
++        mass_text = point.get("m_h_GeV_text", _mass_convention(point).get("m_h_GeV_text"))
++        if mh != 125.20 or mass_text != "125.20":
++            raise ValueError("v3 new production requires the active decimal m_h value 125.20 GeV")
++    else:
++        mh = resolve_m_h_GeV(point)
++    m_phi = resolve_m_phi_GeV(point, require_canonical=is_v3)
++    if mh <= 0 or m_phi <= 0:
++        raise ValueError("point masses must be positive")
++    return mh, m_phi
++
++
+ def generate_param_card_text(
+     template_text: str,
+     *,
+@@ -93,10 +225,15 @@ def generate_param_card_text(
+     g_hH2H2_GeV: float = 63.59142520075966,
+     ctau_mm: float = 4.326221529733112,
+     total_width_GeV: Optional[float] = None,
++    ghphiphi_GeV: Optional[float] = None,
+ ) -> str:
+     """Generate exact point-specific param_card.dat content from default template."""
+     ctau_m = ctau_mm / 1000.0
+-    gh_phiphi = -abs(g_hH2H2_GeV)  # UFO convention: GHphiphi = -g_hH2H2
++    # Direct legacy callers may still supply only a magnitude. The production
++    # driver passes the convention-resolved signed value explicitly.
++    gh_phiphi = -abs(g_hH2H2_GeV) if ghphiphi_GeV is None else float(ghphiphi_GeV)
++    if not math.isfinite(gh_phiphi):
++        raise ValueError("GHphiphi must be finite")
+ 
+     if total_width_GeV is None or not math.isfinite(total_width_GeV) or total_width_GeV <= 0:
+         total_width_GeV = 1.973269804e-16 / ctau_m if ctau_m > 0 else 4.561185e-14
+@@ -184,34 +321,29 @@ def run_single_physical_point_madgraph(
+ ) -> Dict[str, Any]:
+     """Execute MadGraph for one physical 2HDM point and return exact result dict."""
+     point_id = str(point.get("point_id", "unknown_point")).strip()
+-    mh = resolve_m_h_GeV(point)
+-    mH2 = float(point.get("mH_input_GeV", point.get("mH", point.get("mH2_GeV", 150.0))))
+-    g_hH2H2 = float(point.get("g_hH2H2_GeV", point.get("g", 63.59142520075966)))
+-    ctau = float(point.get("ctau_mm", point.get("ctau", 4.326221529733112)))
+-    br_bb = float(point.get("br_bb", point.get("BR_bb", 0.7567374858085787)))
+-    
+-    tan_beta = float(point.get("tan_beta_input", point.get("tan_beta", 300000.0)))
+-    lambda6 = float(point.get("lambda6_input", point.get("lambda6", 1e-10)))
+-    M2 = float(point.get("M2_input_GeV2", point.get("M2_GeV2", 22499.9999995)))
+-    total_width = float(point.get("total_width_GeV", point.get("width_GeV", 4.56118529862185e-14)))
+-
+-    if not math.isfinite(g_hH2H2) or g_hH2H2 <= 0:
+-        return {
+-            "point_id": point_id,
+-            "mH2_GeV": mH2,
+-            "tan_beta": tan_beta,
+-            "lambda6": lambda6,
+-            "M2_GeV2": M2,
+-            "g_hH2H2_GeV": g_hH2H2,
+-            "ctau_mm": ctau,
+-            "BR_bb": br_bb,
+-            "sigma_production_fb": float("nan"),
+-            "sigma_production_unc_fb": float("nan"),
+-            "madgraph_status": "FAILED_INVALID_COUPLING",
+-            "madgraph_run_id_or_path": "",
+-            "banner_sha256": "",
+-            "provenance": {"error": "Coupling g_hH2H2_GeV must be positive finite"},
+-        }
++    ghphiphi = resolve_ghphiphi_GeV(point)
++    has_provenance, valid_v3 = _v3_provenance_state(point)
++    is_v3 = has_provenance and valid_v3
++    mh, mH2 = resolve_point_masses_GeV(point)
++    g_hH2H2 = _resolve_numeric_aliases(
++        point, "g_physical_hphiphi_abs_GeV", ("g_hH2H2_GeV", "g"), require_canonical=is_v3
++    )
++    ctau = _resolve_numeric_aliases(point, "ctau_mm", ("ctau",), require_canonical=is_v3)
++    br_bb = _resolve_numeric_aliases(point, "br_bb", ("BR_bb",), require_canonical=is_v3)
++    tan_beta = _resolve_numeric_aliases(point, "tan_beta", ("tan_beta_input",))
++    lambda6 = _resolve_numeric_aliases(point, "lambda6_input", ("lambda6",))
++    M2 = _resolve_numeric_aliases(point, "M2_input_GeV2", ("M2_GeV2",))
++    total_width = _resolve_numeric_aliases(
++        point, "total_width_GeV", ("width_GeV",), require_canonical=is_v3
++    )
++
++    if min(mh, mH2, g_hH2H2, ctau, total_width, tan_beta, M2) <= 0:
++        raise ValueError("masses, coupling magnitude, lifetime, width, tan_beta, and M2 must be positive")
++    if not 0.0 <= br_bb <= 1.0:
++        raise ValueError("br_bb must be between zero and one")
++    expected_ctau = 1.973269804e-13 / total_width
++    if not math.isclose(ctau, expected_ctau, rel_tol=1e-4):
++        raise ValueError("ctau_mm and total_width_GeV are inconsistent")
+ 
+     template_param_path = proc_dir / "Cards" / "param_card_default.dat"
+     if not template_param_path.exists():
+@@ -223,6 +355,7 @@ def run_single_physical_point_madgraph(
+         mh_GeV=mh,
+         mH2_GeV=mH2,
+         g_hH2H2_GeV=g_hH2H2,
++        ghphiphi_GeV=ghphiphi,
+         ctau_mm=ctau,
+         total_width_GeV=total_width,
+     )
+@@ -306,6 +439,12 @@ def run_single_physical_point_madgraph(
+                         "lambda6": lambda6,
+                         "M2_GeV2": M2,
+                         "g_hH2H2_GeV": g_hH2H2,
++                        "g_physical_hphiphi_GeV": point.get("g_physical_hphiphi_GeV"),
++                        "g_physical_hphiphi_abs_GeV": point.get("g_physical_hphiphi_abs_GeV"),
++                        "two_hdmc_hphiphi_real_GeV": point.get("two_hdmc_hphiphi_real_GeV"),
++                        "two_hdmc_hphiphi_imag_GeV": point.get("two_hdmc_hphiphi_imag_GeV"),
++                        "GHphiphi_GeV": ghphiphi,
++                        "coupling_prescription": point.get("coupling_prescription", "historical_replay"),
+                         "ctau_mm": ctau,
+                         "BR_bb": br_bb,
+                         "sigma_production_fb": float("nan"),
+@@ -341,6 +480,17 @@ def run_single_physical_point_madgraph(
+         "lambda6": lambda6,
+         "M2_GeV2": M2,
+         "g_hH2H2_GeV": g_hH2H2,
++        "g_physical_hphiphi_GeV": point.get("g_physical_hphiphi_GeV"),
++        "g_physical_hphiphi_abs_GeV": point.get("g_physical_hphiphi_abs_GeV"),
++        "two_hdmc_hphiphi_real_GeV": point.get("two_hdmc_hphiphi_real_GeV"),
++        "two_hdmc_hphiphi_imag_GeV": point.get("two_hdmc_hphiphi_imag_GeV"),
++        "mass_convention_id": point.get("mass_convention_id", _mass_convention(point).get("convention_id")),
++        "m_h_GeV_text": point.get("m_h_GeV_text", _mass_convention(point).get("m_h_GeV_text")),
++        "GHphiphi_GeV": ghphiphi,
++        "coupling_prescription": point.get("coupling_prescription", "historical_replay"),
++        "physics_conventions_schema": point.get("physics_conventions_schema", _mass_convention(point).get("schema_version")),
++        "physics_conventions_commit": point.get("physics_conventions_commit", _mass_convention(point).get("source_commit")),
++        "physics_conventions_sha256": point.get("physics_conventions_sha256", _mass_convention(point).get("source_sha256")),
+         "ctau_mm": ctau,
+         "BR_bb": br_bb,
+         "sigma_production_fb": sigma_production_fb,
+diff --git a/src/llp_recast/constants.py b/src/llp_recast/constants.py
+index 594ee42..3a4df78 100644
+--- a/src/llp_recast/constants.py
++++ b/src/llp_recast/constants.py
+@@ -1,53 +1,51 @@
+-"""Physics and analysis constants for the minimal LLP recast scaffold.
++"""Physics and analysis constants loaded from the controlled v3 cache."""
+ 
+-The shared physics conventions (hbar*c, c) are loaded from the ecosystem-wide
+-``conventions/physics_conventions.yaml`` so this repo cannot drift from
+-dihiggs / dihiggs_boundary. The pinned literals below are the fallback used
+-when PyYAML or the file is unavailable; ``tests/test_constants.py`` asserts the
+-loaded values equal these literals so the two can never silently disagree.
+-"""
++from __future__ import annotations
+ 
+-import os
++import hashlib
++from pathlib import Path
+ 
+-# Pinned fallback values (must equal conventions/physics_conventions.yaml).
+-_HBAR_C_GEV_MM_PINNED = 1.973269804e-13  # c*tau[mm] = hbar*c / Gamma[GeV]
+-_C_MM_PER_NS_PINNED = 299.792458  # c*tau[mm] = C_MM_PER_NS * tau[ns]
+-# Decimal string, not float: the float64 repr of 125.20 is 1.25200000000000003e+02,
+-# which is not byte-equal to the 1.25200000000000000e+02 form SLHA/UFO cards need.
+-_M_H_GEV_TEXT_PINNED = "125.20"
++import yaml
+ 
+-# repo root: src/llp_recast/constants.py -> up three levels.
+-_REPO_ROOT = os.path.dirname(
+-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+-)
+-CONVENTIONS_PATH = os.path.join(
+-    _REPO_ROOT, "conventions", "physics_conventions.yaml"
+-)
++_REPO_ROOT = Path(__file__).resolve().parents[2]
++CONVENTIONS_PATH = _REPO_ROOT / "conventions/physics_conventions.yaml"
++CONVENTIONS_LOCK_PATH = _REPO_ROOT / "conventions/physics_conventions.lock.yaml"
++_AUTHORITY_COMMIT = "087ba246e9a9fa34b16249b52629a62703893b5c"
++_AUTHORITY_SHA256 = "4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6"
+ 
+ 
+ def _load_conventions():
+     try:
+-        import yaml
+-    except ImportError:
+-        return {}
+-    try:
+-        with open(CONVENTIONS_PATH) as fh:
+-            return yaml.safe_load(fh) or {}
+-    except OSError:
+-        return {}
++        content = CONVENTIONS_PATH.read_bytes()
++        sidecar = yaml.safe_load(CONVENTIONS_LOCK_PATH.read_text(encoding="utf-8"))
++        conventions = yaml.safe_load(content)
++    except (OSError, yaml.YAMLError) as exc:
++        raise RuntimeError("cannot load the v3 physics convention cache and provenance") from exc
++
++    digest = hashlib.sha256(content).hexdigest()
++    expected = {
++        "source_repository": "fbientrigo/dihiggs",
++        "source_commit": _AUTHORITY_COMMIT,
++        "source_path": "conventions/physics_conventions.yaml",
++        "source_sha256": _AUTHORITY_SHA256,
++        "schema_version": "physics_conventions_v3",
++    }
++    if digest != _AUTHORITY_SHA256 or not isinstance(sidecar, dict):
++        raise RuntimeError("physics convention cache checksum or sidecar is invalid")
++    for field, value in expected.items():
++        if sidecar.get(field) != value:
++            raise RuntimeError(f"physics convention provenance {field} does not match authority")
++    if not isinstance(conventions, dict) or conventions.get("schema_version") != "physics_conventions_v3":
++        raise RuntimeError("physics convention cache is not physics_conventions_v3")
++    return conventions
+ 
+ 
+ _CONV = _load_conventions()
+-
+-HBAR_C_GEV_MM = float(_CONV.get("hbar_c_gev_mm", _HBAR_C_GEV_MM_PINNED))
+-C_MM_PER_NS = float(_CONV.get("c_mm_per_ns", _C_MM_PER_NS_PINNED))
+-
+-# Canonical SM-like Higgs mass for ACTIVE physical-point production.
+-# Prefer reading m_h_GeV off the point itself; use this only where no point is
+-# in hand (campaign defaults, card-writer fallbacks).
+-M_H_GEV_TEXT = str(
+-    (_CONV.get("sm_like_higgs") or {}).get("m_h_GeV", _M_H_GEV_TEXT_PINNED)
+-)
++HBAR_C_GEV_MM = float(_CONV["constants"]["hbar_c_gev_mm"])
++C_MM_PER_NS = float(_CONV["constants"]["c_mm_per_ns"])
++M_H_GEV_TEXT = _CONV["mass_conventions"]["active"]["value_GeV"]
++if not isinstance(M_H_GEV_TEXT, str):
++    raise RuntimeError("active m_h convention must remain a decimal string")
+ M_H_GEV = float(M_H_GEV_TEXT)
+ 
+ ATLAS_DVJETS_LUMI_FB = 139.0
+diff --git a/state/CURRENT_CAMPAIGN.yaml b/state/CURRENT_CAMPAIGN.yaml
+index f157b7d..1c37c01 100644
+--- a/state/CURRENT_CAMPAIGN.yaml
++++ b/state/CURRENT_CAMPAIGN.yaml
+@@ -1,67 +1,42 @@
+-schema: dihiggs.current_campaign.v1
+-
+-# Machine-readable form of docs/CURRENT_DATA_AUTHORITY.md -- read that file
+-# for the full explanation. This file is the single source future tooling
+-# should check programmatically before treating any number as current.
+-
++schema: dihiggs.current_campaign.v2
+ status: PREPARING
+ 
+-active_workspace:
+-  path: /home/fabian/atlas_dihiggs_clean
+-  repository: dihiggs_hep_cross
+-  commit: a45d8b04941ec2f1f028eae0a328eb711c7a3404
+-  branch: main
+-  dirty: false
+-  reset_date: "2026-08-31"
+-
+-physics:
+-  process: "g g > H > h2 h2"
+-  sqrt_s_TeV: 13
+-  m_h_GeV: 125.20
+-  mass_convention_source: "dihiggs_hep_cross@53fb57e, dihiggs_ufo@7dd02c1, dihiggs/conventions/physics_conventions.yaml"
++physics_convention:
++  authority_repository: fbientrigo/dihiggs
++  authority_path: conventions/physics_conventions.yaml
++  authority_commit: 087ba246e9a9fa34b16249b52629a62703893b5c
++  authority_sha256: 4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6
++  schema_version: physics_conventions_v3
++  active_mass_convention_id: mh_125p20_active_2026
++  m_h_GeV: "125.20"
++  authority_kind: project_convention
++  campaign_choices_required: true
+ 
+ madgraph:
+   campaign_id: null
+   authoritative_results: null
+-  # Do not set authoritative_results until a campaign has completed AND
+-  # passed the 4-step promotion process in docs/CURRENT_DATA_AUTHORITY.md
+-  # section 6 (banner check, GHphiphi consistency, seed agreement, manifest
+-  # + human review). A number existing somewhere in the archive is not
+-  # sufficient grounds to set this field.
++  promotion_requires: [banner_verification, coupling_consistency, independent_seed_agreement, manifest_review, human_acceptance]
+ 
+ coupling_prescriptions:
+   physical_2HDM:
+-    allowed: true
+     implemented: true
+-    description: >-
+-      GHphiphi derived from the validated 2HDM benchmark point via the real
+-      evaluator chain (DihiggsPointV2Evaluator / Lambda1EvaluatorV2 ->
+-      dihiggs_boundary handoff -> run_physical_point_madgraph.py's
+-      generate_param_card_text, which writes GHphiphi = -abs(g_hH2H2_GeV)).
+-      This is the prescription every archived and current-tooling MadGraph
+-      run in this workspace has used so far.
+-
++    signed_point_field: g_physical_hphiphi_GeV
++    ufo_mapping: "GHphiphi = -g_physical_hphiphi_GeV"
++    magnitude_compatibility_field: g_hH2H2_GeV
++    magnitude_field_is_not_sign_authority: true
++  effective_mass_only:
++    implemented: false
++    ufo_vertex_mapping_status: unresolved
++  effective_m22_shifted:
++    implemented: false
++    ufo_vertex_mapping_status: unresolved
+   PI_simplified:
+-    allowed: true
+     implemented: false
+-    formula: "GHphiphi = -8 * mH2^2 / v"
+-    description: >-
+-      Simplified production prescription. NOT IMPLEMENTED ANYWHERE in this
+-      workspace as of the 2026-08-31 reset (verified: no occurrence of this
+-      formula in any of the 6 repos' source). A deliverable of the upcoming
+-      campaign, not an existing asset.
++    note: No authorized v3 mapping is defined; do not substitute another prescription.
+ 
+ historical_data:
+-  usable_for_current_claims: false
+-  archive_root: /home/fabian/atlas_dihiggs_archive/20260831_pre_madgraph_reset
+-  archive_manifest: /home/fabian/atlas_dihiggs_archive/20260831_pre_madgraph_reset/ARCHIVE_MANIFEST.tsv
+-  do_not_use_notice: /home/fabian/atlas_dihiggs_archive/20260831_pre_madgraph_reset/DO_NOT_USE_FOR_CURRENT_PHYSICS.md
+-  most_complete_prior_campaign: "h2_llp_production_300_330_345 (mH2=300/330/345 GeV, 6/6 seeds VALID, dihiggs_hep_cross-h2-llp-production branch) -- complete and checksummed, but pre-reset and NOT promoted to current"
++  mutate_artifacts: false
++  relabel_as_active: false
++  preserved_conventions: [mh_125p13_pdg_2026_historical_replay, mh_125p13_high_mass_v1, mh_125p09_lambda1_boundary_legacy, mh_125p0_ufo_autoresearch_legacy]
+ 
+-authority_rule:
+-  - "Do not infer current cross sections from archived campaigns."
+-  - "Every cross section must identify GHphiphi and its prescription (physical_2HDM or PI_simplified)."
+-  - "MadGraph banners are authoritative over copied summary values -- verify with scripts/madgraph_banner_verification.py before trusting any sigma."
+-  - "A cross section is incomplete metadata unless it records mH2, GHphiphi, coupling prescription, process, sqrt(s), UFO identity, seed, and the banner/source artifact path."
+-  - "Do not treat 'most recent timestamp' as 'most current' -- currency is set explicitly in this file, never inferred from a file's mtime."
+-  - "Update authoritative_results only after the 4-step promotion process in docs/CURRENT_DATA_AUTHORITY.md section 6."
++rule: Current data authority is independent of the theory-convention authority; no result is authoritative until explicitly promoted here after validation and human acceptance.
+diff --git a/tests/test_constants.py b/tests/test_constants.py
+index efc85a6..d574548 100644
+--- a/tests/test_constants.py
++++ b/tests/test_constants.py
+@@ -12,19 +12,18 @@ def test_conventions_file_present():
+     assert os.path.exists(CONVENTIONS)
+ 
+ 
+-def test_constants_match_pinned_fallback():
+-    """The loaded constants must equal the pinned fallback literals, so the
+-    shared conventions file can never silently disagree with the code."""
+-    assert constants.HBAR_C_GEV_MM == constants._HBAR_C_GEV_MM_PINNED
+-    assert constants.C_MM_PER_NS == constants._C_MM_PER_NS_PINNED
++def test_constants_are_loaded_from_the_v3_cache():
++    assert constants.HBAR_C_GEV_MM == 1.973269804e-13
++    assert constants.C_MM_PER_NS == 299.792458
++    assert constants.M_H_GEV_TEXT == "125.20"
+ 
+ 
+ def test_constants_match_conventions_yaml():
+     yaml = pytest.importorskip("yaml")
+     with open(CONVENTIONS) as fh:
+         conv = yaml.safe_load(fh)
+-    assert constants.HBAR_C_GEV_MM == float(conv["hbar_c_gev_mm"])
+-    assert constants.C_MM_PER_NS == float(conv["c_mm_per_ns"])
++    assert constants.HBAR_C_GEV_MM == float(conv["constants"]["hbar_c_gev_mm"])
++    assert constants.C_MM_PER_NS == float(conv["constants"]["c_mm_per_ns"])
+ 
+ 
+ def test_pinned_values():
+@@ -46,8 +45,22 @@ def test_canonical_mh_matches_conventions_file():
+     yaml = pytest.importorskip("yaml")
+     with open(CONVENTIONS) as fh:
+         conv = yaml.safe_load(fh)
+-    assert conv["sm_like_higgs"]["m_h_GeV"] == constants.M_H_GEV_TEXT
+-    assert constants.M_H_GEV_TEXT == constants._M_H_GEV_TEXT_PINNED
++    assert conv["mass_conventions"]["active"]["value_GeV"] == constants.M_H_GEV_TEXT
+     # Decimal string, not float: f"{125.20:.17e}" is 1.25200000000000003e+02,
+     # which is not the byte form SLHA/UFO cards need.
+-    assert isinstance(conv["sm_like_higgs"]["m_h_GeV"], str)
++    assert isinstance(conv["mass_conventions"]["active"]["value_GeV"], str)
++
++
++def test_convention_loader_fails_closed_on_tampered_sidecar(tmp_path, monkeypatch):
++    import yaml
++
++    cache = tmp_path / "physics_conventions.yaml"
++    sidecar = tmp_path / "physics_conventions.lock.yaml"
++    cache.write_bytes(open(CONVENTIONS, "rb").read())
++    lock = yaml.safe_load(open(constants.CONVENTIONS_LOCK_PATH))
++    lock["source_commit"] = "0" * 40
++    sidecar.write_text(yaml.safe_dump(lock))
++    monkeypatch.setattr(constants, "CONVENTIONS_PATH", cache)
++    monkeypatch.setattr(constants, "CONVENTIONS_LOCK_PATH", sidecar)
++    with pytest.raises(RuntimeError, match="source_commit"):
++        constants._load_conventions()
+diff --git a/tests/test_external_tools.py b/tests/test_external_tools.py
+index 9a2fb47..bd3b8b9 100644
+--- a/tests/test_external_tools.py
++++ b/tests/test_external_tools.py
+@@ -1,26 +1,20 @@
+-"""Drift guard for external-tool versions and the shared conventions file.
++"""Drift guard for external-tool versions and the v3 convention cache provenance.
+ 
+-The three repos (dihiggs, dihiggs_boundary, dihiggs_hep_cross) are separate git
+-repos and cannot see each other in CI. Cross-repo agreement is instead enforced
+-by SHARED PINNED CONSTANTS asserted independently in each repo:
+-
+-  * EXPECTED_VERSIONS  -- every repo's external_tools.lock.yaml must declare
+-    these same tool versions.
+-  * PINNED_CONVENTIONS_MD5 -- every repo's conventions/physics_conventions.yaml
+-    must hash to this. Since the file is byte-identical across repos, one pinned
+-    md5 makes any drift in any repo fail that repo's CI.
+-
+-Keep these constants identical across the three test_external_tools.py copies.
++Each downstream cache is checked against the canonical source identity and
++its local sidecar; the workspace checker additionally verifies the source
++bytes from the pinned core commit.
+ """
+ 
+ import hashlib
+ import os
+ 
+ import pytest
++yaml = pytest.importorskip("yaml")
+ 
+ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ MANIFEST = os.path.join(REPO_ROOT, "external_tools.lock.yaml")
+ CONVENTIONS = os.path.join(REPO_ROOT, "conventions", "physics_conventions.yaml")
++CONVENTIONS_LOCK = os.path.join(REPO_ROOT, "conventions", "physics_conventions.lock.yaml")
+ 
+ # --- shared cross-repo pins (keep identical in all three repos) ------------
+ EXPECTED_VERSIONS = {
+@@ -29,8 +23,9 @@ EXPECTED_VERSIONS = {
+     "HiggsBounds_dataset": "v1.7",
+     "HiggsSignals_dataset": "v1.1",
+ }
+-PINNED_CONVENTIONS_MD5 = "5a2e880a7c36a6aecf2a99e18cab4d44"
+-CONVENTIONS_SCHEMA_VERSION = "physics_conventions_v2"
++PINNED_CONVENTIONS_SHA256 = "4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6"
++CONVENTIONS_SCHEMA_VERSION = "physics_conventions_v3"
++CONVENTIONS_COMMIT = "087ba246e9a9fa34b16249b52629a62703893b5c"
+ 
+ 
+ def _load_manifest():
+@@ -57,27 +52,27 @@ def test_declared_versions_match_shared_pins():
+         )
+ 
+ 
+-def test_conventions_md5_matches_pin():
+-    """The shared conventions file must hash to the pinned md5 (byte-identical
+-    across the three repos)."""
++def test_conventions_cache_and_provenance_match_pins():
+     assert os.path.exists(CONVENTIONS)
++    assert os.path.exists(CONVENTIONS_LOCK)
+     with open(CONVENTIONS, "rb") as fh:
+-        actual = hashlib.md5(fh.read()).hexdigest()
+-    assert actual == PINNED_CONVENTIONS_MD5, (
+-        "conventions/physics_conventions.yaml md5 %s != pinned %s "
+-        "(did the shared file drift?)" % (actual, PINNED_CONVENTIONS_MD5)
+-    )
++        actual = hashlib.sha256(fh.read()).hexdigest()
++    assert actual == PINNED_CONVENTIONS_SHA256
++    lock = yaml.safe_load(open(CONVENTIONS_LOCK))
++    assert lock["source_repository"] == "fbientrigo/dihiggs"
++    assert lock["source_commit"] == CONVENTIONS_COMMIT
++    assert lock["source_path"] == "conventions/physics_conventions.yaml"
++    assert lock["source_sha256"] == actual
++    assert lock["schema_version"] == CONVENTIONS_SCHEMA_VERSION
+ 
+ 
+-def test_manifest_conventions_block_matches_file():
+-    """The manifest's recorded md5/schema_version must match the actual file, so
+-    the manifest cannot silently lag the conventions file."""
++def test_manifest_conventions_block_matches_cache():
+     conv = _load_manifest()["conventions"]
+-    assert conv["md5"] == PINNED_CONVENTIONS_MD5
++    assert conv["sha256"] == PINNED_CONVENTIONS_SHA256
+     assert conv["schema_version"] == CONVENTIONS_SCHEMA_VERSION
++    assert conv["provenance_file"] == "conventions/physics_conventions.lock.yaml"
+     with open(CONVENTIONS, "rb") as fh:
+-        actual = hashlib.md5(fh.read()).hexdigest()
+-    assert conv["md5"] == actual
++        assert conv["sha256"] == hashlib.sha256(fh.read()).hexdigest()
+ 
+ 
+ def test_vendored_paths_exist_when_declared():
+diff --git a/tests/test_madgraph_banner_verification.py b/tests/test_madgraph_banner_verification.py
+index c22dc9f..2183ce6 100644
+--- a/tests/test_madgraph_banner_verification.py
++++ b/tests/test_madgraph_banner_verification.py
+@@ -1,58 +1,130 @@
+-"""Unit tests for the banner-authoritative verification helpers.
+-
+-Migrated from mission_runs/20260826_h2_table_v2_requalification/work/
+-run_madgraph_v2.py during the 2026-08-31 workspace reset; see
+-scripts/madgraph_banner_verification.py for the migration note.
+-"""
++"""Unit tests for convention-aware banner verification."""
+ 
+ import sys
+ from pathlib import Path
+ 
++import pytest
++
+ REPO_ROOT = Path(__file__).resolve().parents[1]
+ sys.path.insert(0, str(REPO_ROOT / "scripts"))
+ 
+ from madgraph_banner_verification import banner_checks, checks_pass, compatible
+ 
+-REAL_BANNER = REPO_ROOT / "artifacts/h2_first_physical/madgraph/run_01/run_01_tag_1_banner.txt"
+ 
+-# Matches REAL_BANNER exactly (mh=125.13 -- this benchmark predates the
+-# 125.20 GeV convention; see docs/MH_CONVENTION.md).
+-REAL_BANNER_POINT = {
++def make_banner(tmp_path, coupling=-63.5914252007596588, mh=125.13, mH2=150.0):
++    path = tmp_path / "banner.txt"
++    path.write_text(f"""generate g g > H > h2 h2
++6500 = ebeam1
++6500 = ebeam2
++nn23lo1 = pdlabel
++230000 = lhaid
++False = fixed_ren_scale
++False = fixed_fac_scale
++-1 = dynamical_scale_choice
++ 25 {mh} # MH
++ 9000006 {mH2} # Mh2
++ 3 {coupling} # GHphiphi
++DECAY 9000006 4.561185e-14
++""")
++    return path
++
++
++LEGACY_POINT = {
+     "mh_input_GeV": 125.13,
+     "mH_input_GeV": 150.0,
+     "g_hH2H2_GeV": 63.5914252007596588,
+     "total_width_GeV": 4.561185e-14,
++    "historical_replay": True,
++    "mass_convention_id": "mh_125p13_high_mass_v1",
+ }
+ 
+ 
+-def test_banner_checks_all_pass_on_a_real_tracked_banner():
+-    checks = banner_checks(REAL_BANNER, REAL_BANNER_POINT)
++def test_banner_checks_all_required_fields(tmp_path):
++    banner = make_banner(tmp_path)
++    checks = banner_checks(banner, LEGACY_POINT)
+     assert checks == {name: True for name in checks}
+-    assert checks_pass(REAL_BANNER, REAL_BANNER_POINT)
++    assert checks_pass(banner, LEGACY_POINT)
+ 
+ 
+-def test_banner_checks_coupling_uses_the_ghphiphi_sign_convention():
+-    """GHphiphi must equal -abs(g_hH2H2_GeV). Passing in the point's coupling
+-    with the opposite sign must still pass (-abs() normalizes it away), but a
+-    genuinely different magnitude must fail the coupling check even though
+-    every other field still matches."""
+-    opposite_sign_point = dict(REAL_BANNER_POINT, g_hH2H2_GeV=-63.5914252007596588)
+-    assert banner_checks(REAL_BANNER, opposite_sign_point)["coupling"] is True
+-
+-    mismatched_point = dict(REAL_BANNER_POINT, g_hH2H2_GeV=1.0)
+-    checks = banner_checks(REAL_BANNER, mismatched_point)
++def test_legacy_replay_keeps_magnitude_compatibility(tmp_path):
++    banner = make_banner(tmp_path)
++    malformed_magnitude = dict(LEGACY_POINT, g_hH2H2_GeV=-63.5914252007596588)
++    assert banner_checks(banner, malformed_magnitude)["convention_provenance"] is False
++    mismatched = dict(LEGACY_POINT, g_hH2H2_GeV=1.0)
++    checks = banner_checks(banner, mismatched)
+     assert checks["coupling"] is False
+-    assert not checks_pass(REAL_BANNER, mismatched_point)
+-    # Sanity: everything else about the same banner still checks out.
+-    assert checks["mh"] is True
+-    assert checks["mH2"] is True
++    assert not checks_pass(banner, mismatched)
+ 
+ 
+-def test_banner_checks_catches_a_wrong_mass():
+-    wrong_mass_point = dict(REAL_BANNER_POINT, mH_input_GeV=999.0)
+-    checks = banner_checks(REAL_BANNER, wrong_mass_point)
++def test_banner_checks_catches_a_wrong_mass(tmp_path):
++    checks = banner_checks(make_banner(tmp_path), dict(LEGACY_POINT, mH_input_GeV=999.0))
++    assert checks["mH2"] is False
++    assert not checks_pass(make_banner(tmp_path), dict(LEGACY_POINT, mH_input_GeV=999.0))
++
++
++def _v3_point(signed):
++    return {
++        "m_h_GeV": "125.20", "m_phi_GeV": 150.0,
++        "g_physical_hphiphi_GeV": signed,
++        "g_physical_hphiphi_abs_GeV": abs(signed), "g_hH2H2_GeV": abs(signed),
++        "two_hdmc_hphiphi_real_GeV": 0.0,
++        "two_hdmc_hphiphi_imag_GeV": -signed,
++        "coupling_prescription": "physical_2HDM",
++        "mass_convention_id": "mh_125p20_active_2026", "m_h_GeV_text": "125.20",
++        "physics_conventions_schema": "physics_conventions_v3",
++        "physics_conventions_commit": "087ba246e9a9fa34b16249b52629a62703893b5c",
++        "physics_conventions_sha256": "4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6",
++        "total_width_GeV": 4.561185e-14,
++    }
++
++
++def test_v3_signed_physical_coupling_is_used_with_its_sign(tmp_path):
++    point = _v3_point(63.5914252007596588)
++    checks = banner_checks(make_banner(tmp_path, mh=125.20), point)
++    assert checks["convention_provenance"] is True
++    assert checks["coupling"] is True
++
++    point = _v3_point(-63.5914252007596588)
++    checks = banner_checks(make_banner(tmp_path, coupling=63.5914252007596588, mh=125.20), point)
++    assert checks["convention_provenance"] is True
++    assert checks["coupling"] is True
++
++
++def test_v3_banner_rejects_stale_numeric_mh_despite_active_text(tmp_path):
++    point = _v3_point(5.0)
++    point["m_h_GeV"] = "125.13"
++    checks = banner_checks(make_banner(tmp_path, coupling=-5.0, mh=125.13), point)
++    assert checks["convention_provenance"] is False
++    assert checks["mh"] is False
++    assert not checks_pass(make_banner(tmp_path, coupling=-5.0, mh=125.13), point)
++
++
++@pytest.mark.parametrize("missing", ["m_h_GeV", "m_phi_GeV"])
++def test_v3_banner_requires_canonical_mass_fields(tmp_path, missing):
++    point = _v3_point(5.0)
++    del point[missing]
++    checks = banner_checks(make_banner(tmp_path, coupling=-5.0, mh=125.20), point)
++    assert checks["convention_provenance"] is False
++    assert not checks_pass(make_banner(tmp_path, coupling=-5.0, mh=125.20), point)
++
++
++def test_v3_banner_rejects_conflicting_h2_mass_alias(tmp_path):
++    point = _v3_point(5.0)
++    point["mH_input_GeV"] = 151.0
++    checks = banner_checks(make_banner(tmp_path, coupling=-5.0, mh=125.20), point)
++    assert checks["convention_provenance"] is False
+     assert checks["mH2"] is False
+-    assert not checks_pass(REAL_BANNER, wrong_mass_point)
++    assert not checks_pass(make_banner(tmp_path, coupling=-5.0, mh=125.20), point)
++
++
++def test_v3_signed_coupling_rejects_magnitude_mismatch():
++    from run_physical_point_madgraph import resolve_ghphiphi_GeV
++
++    point = _v3_point(63.0)
++    point["g_physical_hphiphi_abs_GeV"] = 64.0
++    point["g_hH2H2_GeV"] = 64.0
++    with pytest.raises(ValueError, match="inconsistent"):
++        resolve_ghphiphi_GeV(point)
+ 
+ 
+ def test_compatible_agrees_within_3_sigma():
+diff --git a/tests/test_mass_jet_campaign.py b/tests/test_mass_jet_campaign.py
+index a44271e..7f4a349 100644
+--- a/tests/test_mass_jet_campaign.py
++++ b/tests/test_mass_jet_campaign.py
+@@ -28,6 +28,7 @@ from run_mass_jet_control_campaign import (
+ def test_canonical_points_completeness():
+     """Verify all 8 masses are present and carry valid physics coordinates."""
+     expected_masses = [150.0, 200.0, 250.0, 300.0, 350.0, 400.0, 500.0, 800.0]
++    assert ACTIVE_MH_CONVENTION_GEV == 125.20
+     assert sorted(CANONICAL_POINTS.keys()) == expected_masses
+     for m in expected_masses:
+         pt = CANONICAL_POINTS[m]
+diff --git a/tests/test_run_physical_point_madgraph.py b/tests/test_run_physical_point_madgraph.py
+index 614cd27..b64613d 100644
+--- a/tests/test_run_physical_point_madgraph.py
++++ b/tests/test_run_physical_point_madgraph.py
+@@ -5,6 +5,7 @@ import math
+ import subprocess
+ import sys
+ from pathlib import Path
++from types import SimpleNamespace
+ 
+ import pytest
+ 
+@@ -17,6 +18,7 @@ from run_physical_point_madgraph import (
+     generate_run_card_text,
+     run_single_physical_point_madgraph,
+ )
++import run_physical_point_madgraph as mg_runner
+ 
+ 
+ def test_param_card_generation_substitutes_all_blocks():
+@@ -63,8 +65,13 @@ def test_benchmark_closure_execution(tmp_path):
+         "point_id": "H2scan_mH150_tb300000",
+         # HISTORICAL benchmark convention; see scripts/r9_run_model_scan.py.
+         "mh_input_GeV": 125.13,
++        "historical_replay": True,
++        "mass_convention_id": "mh_125p13_high_mass_v1",
+         "mH_input_GeV": 150.0,
+         "g_hH2H2_GeV": 63.59142520075966,
++        "tan_beta": 300000.0,
++        "lambda6_input": 1e-10,
++        "M2_input_GeV2": 22499.9999995,
+         "ctau_mm": 4.326221529733112,
+         "br_bb": 0.7567374858085787,
+         "total_width_GeV": 4.56118529862185e-14,
+@@ -92,8 +99,9 @@ def test_resolver_reads_m_h_from_the_point():
+     assert resolve_m_h_GeV({"m_h_GeV": "125.20"}) == 125.20
+     assert resolve_m_h_GeV({"mh_input_GeV": 125.13}) == 125.13
+     assert resolve_m_h_GeV({"mh": 125.09}) == 125.09
+-    # Newest alias wins when several are present.
+-    assert resolve_m_h_GeV({"m_h_GeV": "125.20", "mh": 125.09}) == 125.20
++    assert resolve_m_h_GeV({"m_h_GeV": "125.20", "mh": 125.20}) == 125.20
++    with pytest.raises(ValueError, match="aliases.*disagree"):
++        resolve_m_h_GeV({"m_h_GeV": "125.20", "mh": 125.09})
+ 
+ 
+ def test_resolver_refuses_to_default_a_missing_mass():
+@@ -142,3 +150,110 @@ def test_param_card_does_not_clobber_decay_25_width():
+     )
+     assert "25 1.252000e+02" in rendered  # MASS block: updated to the point's mh
+     assert "DECAY  25  4.070000e-03" in rendered  # decay block: untouched
++
++
++def test_v3_signed_coupling_controls_ghphiphi():
++    from run_physical_point_madgraph import resolve_ghphiphi_GeV
++
++    point = {
++        "physics_conventions_schema": "physics_conventions_v3",
++        "physics_conventions_commit": "087ba246e9a9fa34b16249b52629a62703893b5c",
++        "physics_conventions_sha256": "4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6",
++        "coupling_prescription": "physical_2HDM",
++        "mass_convention_id": "mh_125p20_active_2026", "m_h_GeV_text": "125.20",
++        "g_physical_hphiphi_GeV": 5.0, "g_physical_hphiphi_abs_GeV": 5.0, "g_hH2H2_GeV": 5.0,
++        "two_hdmc_hphiphi_real_GeV": 0.0, "two_hdmc_hphiphi_imag_GeV": -5.0,
++    }
++    assert resolve_ghphiphi_GeV(point) == -5.0
++    point.update(g_physical_hphiphi_GeV=-5.0, two_hdmc_hphiphi_imag_GeV=5.0)
++    assert resolve_ghphiphi_GeV(point) == 5.0
++
++
++def test_new_production_rejects_unlabelled_magnitude_only_points():
++    from run_physical_point_madgraph import resolve_ghphiphi_GeV
++
++    with pytest.raises(ValueError, match="requires complete"):
++        resolve_ghphiphi_GeV({"g_hH2H2_GeV": 5.0, "mh_input_GeV": 125.20})
++
++
++def v3_point():
++    return {
++        "point_id": "v3-entrypoint",
++        "physics_conventions_schema": "physics_conventions_v3",
++        "physics_conventions_commit": "087ba246e9a9fa34b16249b52629a62703893b5c",
++        "physics_conventions_sha256": "4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6",
++        "coupling_prescription": "physical_2HDM",
++        "mass_convention_id": "mh_125p20_active_2026",
++        "m_h_GeV_text": "125.20",
++        "m_h_GeV": "125.20",
++        "m_phi_GeV": 175.0,
++        "tan_beta": 1000.0,
++        "lambda6_input": 0.01,
++        "M2_input_GeV2": 22500.0,
++        "g_physical_hphiphi_GeV": 5.0,
++        "g_physical_hphiphi_abs_GeV": 5.0,
++        "g_hH2H2_GeV": 5.0,
++        "two_hdmc_hphiphi_real_GeV": 0.0,
++        "two_hdmc_hphiphi_imag_GeV": -5.0,
++        "ctau_mm": 4.93317451,
++        "br_bb": 0.7,
++        "total_width_GeV": 4.0e-14,
++    }
++
++
++def test_v3_entrypoint_generates_card_and_runs_with_mock_madgraph(tmp_path, monkeypatch):
++    proc_dir = tmp_path / "proc"
++    cards = proc_dir / "Cards"
++    cards.mkdir(parents=True)
++    (cards / "param_card_default.dat").write_text(
++        "Block MASS\n 25 125.0 # MH\n 9000006 150.0 # Mh2\n"
++        "Block frblock\n 2 0.1 # ctauh2\n 3 -5.0 # GHphiphi\n"
++        "DECAY 9000006 1e-13\n"
++    )
++
++    def fake_madgraph(command, *, cwd, **kwargs):
++        run_tag = command[-1]
++        run_dir = Path(cwd) / "Events" / run_tag
++        run_dir.mkdir(parents=True)
++        (run_dir / f"{run_tag}_tag_1_banner.txt").write_text(
++            "# Integrated weight (pb) : 2.0e-3\n"
++        )
++        return SimpleNamespace(stdout="", stderr="", returncode=0)
++
++    monkeypatch.setattr(mg_runner.subprocess, "run", fake_madgraph)
++    result = mg_runner.run_single_physical_point_madgraph(
++        v3_point(), proc_dir=proc_dir, cards_out_dir=tmp_path / "out", seeds=[101]
++    )
++
++    assert result["madgraph_status"] == "VALID"
++    assert result["mH2_GeV"] == 175.0
++    assert result["GHphiphi_GeV"] == -5.0
++    card = (tmp_path / "out" / "v3-entrypoint_param_card.dat").read_text()
++    assert "25 1.252000e+02" in card
++    assert "9000006 1.750000e+02" in card
++    assert "9000006 4.000000e-14" in card
++
++
++@pytest.mark.parametrize(
++    "missing", ["m_phi_GeV", "ctau_mm", "total_width_GeV", "tan_beta", "lambda6_input", "M2_input_GeV2"]
++)
++def test_v3_entrypoint_rejects_missing_inputs_before_madgraph(missing, tmp_path):
++    point = v3_point()
++    del point[missing]
++    with pytest.raises(KeyError):
++        run_single_physical_point_madgraph(point, proc_dir=tmp_path)
++
++
++@pytest.mark.parametrize("field", ["m_h_GeV", "m_phi_GeV", "ctau_mm", "total_width_GeV", "tan_beta"])
++def test_v3_entrypoint_rejects_nonfinite_inputs_before_madgraph(field, tmp_path):
++    point = v3_point()
++    point[field] = float("nan")
++    with pytest.raises(ValueError, match="finite"):
++        run_single_physical_point_madgraph(point, proc_dir=tmp_path)
++
++
++def test_v3_entrypoint_rejects_conflicting_mass_aliases(tmp_path):
++    point = v3_point()
++    point["mH_input_GeV"] = 150.0
++    with pytest.raises(ValueError, match="aliases.*disagree"):
++        run_single_physical_point_madgraph(point, proc_dir=tmp_path)

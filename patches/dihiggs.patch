@@ -1,0 +1,1550 @@
+diff --git a/README.md b/README.md
+index fa032ed..b3c4d51 100644
+--- a/README.md
++++ b/README.md
+@@ -46,19 +46,10 @@ TRIPLE_OK/triple_ok_legacy is theory-only. theory_ok_v1 currently equals
+ those three predicates. No experimental acceptance is inferred from these
+ flags.
+ 
+-## Build prerequisites
++## Build and validation
+ 
+-Linux or WSL, a C++17 compiler, GNU Make, GSL, and the repository's patched
+-2HDMC checkout under 2hdmc/ are required. HiggsTools is not needed for the
+-three v2 2HDMC-only executables.
+-
+-## Build commands
+-
+-    make -C 2hdmc -j2
+-    make -C dihiggs clean
+-    make -C dihiggs -j2
+-
+-The v2 binaries are written under dihiggs/app/.
++See the [quickstart](docs/quickstart.md) for prerequisites, build commands,
++smoke evaluations, and repository validation.
+ 
+ ## Lambda1 v2 smoke test
+ 
+diff --git a/dihiggs/src/GenParamScan.cpp b/dihiggs/src/GenParamScan.cpp
+deleted file mode 100644
+index 0557d90..0000000
+--- a/dihiggs/src/GenParamScan.cpp
++++ /dev/null
+@@ -1,207 +0,0 @@
+-#include "THDM.h"
+-#include "Constraints.h"
+-#include "DecayTable.h"
+-#include "ParamUtils.hpp"  // CSV & config utilities
+-#include <iostream>
+-#include <fstream>
+-#include <cmath>
+-#include <chrono>
+-#include <iomanip>
+-#include <omp.h>  // OpenMP for parallelization
+-
+-using namespace std;
+-using namespace std::chrono;
+-
+-struct ParamSet {
+-    double lambda1;
+-    double lambda2;
+-    double lambda3;
+-    double lambda4;
+-    double lambda5;
+-    double m12;
+-    double beta;
+-};
+-
+-// Compute branching ratio BR(H→γγ)
+-double computeBRGammaGamma(const ParamSet &p) {
+-    THDM model;
+-    SM sm;
+-    model.set_SM(sm);
+-
+-    double tb = std::tan(p.beta);
+-
+-    bool pset = model.set_param_gen(
+-        p.lambda1, p.lambda2, p.lambda3, p.lambda4, p.lambda5,
+-        0.0, 0.0, p.m12, tb
+-    );
+-    if (!pset) return -1.0;
+-
+-    Constraints check(model);
+-    if (!check.check_positivity() || !check.check_unitarity() || !check.check_perturbativity()) {
+-        return -1.0;
+-    }
+-
+-    DecayTable table(model);
+-    double w_hgaga = table.get_gamma_hgaga(2);
+-    double w_htot  = table.get_gammatot_h(2);
+-
+-    if (std::isnan(w_hgaga) || std::isnan(w_htot) || w_htot <= 0.0) {
+-        return -1.0;
+-    }
+-
+-    return w_hgaga / w_htot;
+-}
+-
+-// Global best parameter storage
+-static ParamSet g_bestParams;
+-static double   g_bestBR = -1.0;
+-
+-
+-void perform_param_scan_withGD(const Config &cfg, const string &output_file) {
+-    ofstream results(output_file);
+-    if (!results.is_open()) {
+-        cerr << "Failed to open output file: " << output_file << endl;
+-        return;
+-    }
+-
+-    vector<string> columns = {
+-        "lambda1", "lambda2", "lambda3", "lambda4", "lambda5",
+-        "m12_squared", "beta", "tan_beta",
+-        "positivity_ok", "unitarity_ok", "perturbativity_ok",
+-        "width_h2_bb", "width_h2_tautau", "width_h2_WW", "width_h2_ZZ", "width_hgaga",
+-        "total_width_h2", "branching_ratio_hgaga"
+-    };
+-    write_csv_header(results, columns);
+-
+-    // Convert floating loops to integer steps
+-    int steps_lambda5 = (cfg.lambda5_max - cfg.lambda5_min) / cfg.step_lambda5 + 1;
+-    int steps_m12     = (cfg.m12_squared_max - cfg.m12_squared_min) / cfg.step_m12_squared + 1;
+-    int steps_beta    = (cfg.beta_max - cfg.beta_min) / cfg.step_beta + 1;
+-
+-    double total_iterations = computeTotalIterations(cfg);
+-    double current_iteration = 0.0;
+-    auto start_time = high_resolution_clock::now();
+-
+-    g_bestBR = -1.0;
+-
+-    for (double lambda1 = cfg.lambda1_min; lambda1 <= cfg.lambda1_max; lambda1 += cfg.step_lambda1) {
+-        for (double lambda2 = cfg.lambda2_min; lambda2 <= cfg.lambda2_max; lambda2 += cfg.step_lambda2) {
+-            for (double lambda3 = cfg.lambda3_min; lambda3 <= cfg.lambda3_max; lambda3 += cfg.step_lambda3) {
+-                for (double lambda4 = cfg.lambda4_min; lambda4 <= cfg.lambda4_max; lambda4 += cfg.step_lambda4) {
+-
+-                    #pragma omp parallel
+-                    {
+-                        double local_bestBR = -1.0;
+-                        ParamSet local_bestParams;
+-                        vector<vector<double>> thread_local_rows;  // Buffer for batch writing
+-
+-                        #pragma omp for collapse(3) schedule(dynamic)
+-                        for (int i_lambda5 = 0; i_lambda5 < steps_lambda5; i_lambda5++) {
+-                            for (int i_m12 = 0; i_m12 < steps_m12; i_m12++) {
+-                                for (int i_beta = 0; i_beta < steps_beta; i_beta++) {
+-
+-                                    // Compute the floating values
+-                                    double lambda5 = cfg.lambda5_min + i_lambda5 * cfg.step_lambda5;
+-                                    double m12     = cfg.m12_squared_min + i_m12 * cfg.step_m12_squared;
+-                                    double beta    = cfg.beta_min + i_beta * cfg.step_beta;
+-
+-                                    THDM model;
+-                                    SM sm;
+-                                    model.set_SM(sm);
+-
+-                                    bool pset = model.set_param_gen(
+-                                        lambda1, lambda2, lambda3, lambda4, lambda5,
+-                                        0.0, 0.0, m12, std::tan(beta)
+-                                    );
+-                                    if (!pset) continue;
+-
+-                                    Constraints check(model);
+-                                    bool positivity_ok     = check.check_positivity();
+-                                    bool unitarity_ok      = check.check_unitarity();
+-                                    bool perturbativity_ok = check.check_perturbativity();
+-
+-                                    DecayTable table(model);
+-                                    double w_h2_bb     = table.get_gamma_hdd(2, 3, 3);
+-                                    double w_h2_tautau = table.get_gamma_hll(2, 3, 3);
+-                                    double w_h2_WW     = table.get_gamma_hvv(2, 3);
+-                                    double w_h2_ZZ     = table.get_gamma_hvv(2, 2);
+-                                    double w_hgaga     = table.get_gamma_hgaga(2);
+-                                    double w_total_h2  = table.get_gammatot_h(2);
+-
+-                                    double br_hgaga = (w_total_h2 > 1e-12) ? (w_hgaga / w_total_h2) : 0.0;
+-
+-                                    vector<double> row = {
+-                                        lambda1, lambda2, lambda3, lambda4, lambda5,
+-                                        m12, beta, std::tan(beta),
+-                                        positivity_ok ? 1.0 : 0.0, unitarity_ok ? 1.0 : 0.0, perturbativity_ok ? 1.0 : 0.0,
+-                                        w_h2_bb, w_h2_tautau, w_h2_WW, w_h2_ZZ, w_hgaga,
+-                                        w_total_h2, br_hgaga
+-                                    };
+-
+-                                    thread_local_rows.push_back(row);
+-
+-                                    if (positivity_ok && unitarity_ok && w_total_h2 > 0.0 && !std::isnan(br_hgaga)) {
+-                                        if (br_hgaga > local_bestBR) {
+-                                            local_bestBR = br_hgaga;
+-                                            local_bestParams = {lambda1, lambda2, lambda3, lambda4, lambda5, m12, beta};
+-                                        }
+-                                    }
+-
+-                                    #pragma omp critical
+-                                    {
+-                                        current_iteration += 1.0;
+-                                        auto now_time = high_resolution_clock::now();
+-                                        double elapsed = duration<double>(now_time - start_time).count();
+-                                        double progress = (current_iteration / total_iterations) * 100.0;
+-                                        double estimated_time_left = (elapsed / current_iteration) * (total_iterations - current_iteration);
+-
+-                                        cout << fixed << setprecision(2)
+-                                             << "Progress: " << progress << "% | "
+-                                             << "Elapsed: " << elapsed / 60.0 << " min | "
+-                                             << "ETA: " << estimated_time_left / 60.0 << " min"
+-                                             << "\r" << flush;
+-                                    }
+-                                }
+-                            }
+-                        }
+-
+-                        #pragma omp critical
+-                        {
+-                            for (const auto& row : thread_local_rows) {
+-                                write_csv_row(results, row);
+-                            }
+-                            thread_local_rows.clear();
+-
+-                            if (local_bestBR > g_bestBR) {
+-                                g_bestBR = local_bestBR;
+-                                g_bestParams = local_bestParams;
+-                            }
+-                        }
+-                    }
+-                }
+-            }
+-        }
+-    }
+-
+-    results.close();
+-    cout << "\nGrid search completed. Results saved to " << output_file << endl;
+-}
+-
+-int main(int argc, char *argv[]) {
+-    if (argc < 3) {
+-        cerr << "Usage: " << argv[0] << " <config_file> <output_csv>\n";
+-        return 1;
+-    }
+-
+-    string config_file = argv[1];
+-    string output_file = argv[2];
+-
+-    try {
+-        Config cfg = readConfig(config_file);
+-        perform_param_scan_withGD(cfg, output_file);
+-    } catch(const exception &e) {
+-        cerr << "Error: " << e.what() << endl;
+-        return 1;
+-    }
+-    return 0;
+-}
+diff --git a/dihiggs/src/HiggsParamScan.cpp b/dihiggs/src/HiggsParamScan.cpp
+deleted file mode 100644
+index af750f6..0000000
+--- a/dihiggs/src/HiggsParamScan.cpp
++++ /dev/null
+@@ -1,301 +0,0 @@
+-#include "THDM.h"
+-#include "Constraints.h"
+-#include "DecayTable.h"
+-#include "ParamUtils.hpp"  // Your CSV & config utils
+-#include <iostream>
+-#include <fstream>
+-#include <cmath>
+-#include <chrono>
+-#include <iomanip> // if needed for std::setprecision
+-
+-using namespace std;
+-using namespace std::chrono;
+-
+-struct ParamSet {
+-    double lambda1;
+-    double lambda2;
+-    double lambda3;
+-    double lambda4;
+-    double lambda5;
+-    double m12;
+-    double beta; 
+-};
+-
+-double computeBRGammaGamma(const ParamSet &p) {
+-    THDM model;
+-    SM sm;
+-    model.set_SM(sm);
+-
+-    double tb = std::tan(p.beta);
+-
+-    bool pset = model.set_param_gen(
+-        p.lambda1, p.lambda2, p.lambda3, p.lambda4, p.lambda5,
+-        0.0, 0.0,
+-        p.m12,
+-        tb
+-    );
+-    if (!pset) return -1.0;
+-
+-    Constraints check(model);
+-    bool positivity_ok     = check.check_positivity();
+-    bool unitarity_ok      = check.check_unitarity();
+-    bool perturbativity_ok = check.check_perturbativity();
+-
+-    if (!positivity_ok || !unitarity_ok || !perturbativity_ok) {
+-        return -1.0;
+-    }
+-
+-    DecayTable table(model);
+-    double w_hgaga = table.get_gamma_hgaga(2);
+-    double w_htot  = table.get_gammatot_h(2);
+-
+-    if (std::isnan(w_hgaga) || std::isnan(w_htot) || w_htot <= 0.0) {
+-        return -1.0;
+-    }
+-
+-    double br = w_hgaga / w_htot;
+-    if (std::isnan(br) || br < 0.0) {
+-        return -1.0;
+-    }
+-    return br;
+-}
+-
+-ParamSet computeGradient(const ParamSet &p, double eps = 1e-4) {
+-    ParamSet grad = {0,0,0,0,0,0,0};
+-
+-    // helper to modify a parameter in a copy
+-    auto brWithModified = [&](const ParamSet &origP, double ParamSet::* mem, double newVal) -> double {
+-        ParamSet tmp = origP;
+-        tmp.*mem = newVal;
+-        return computeBRGammaGamma(tmp);
+-    };
+-
+-    auto finiteDiff = [&](double ParamSet::* mem) {
+-        double x0 = p.*mem;
+-        double fplus  = brWithModified(p, mem, x0 + eps);
+-        double fminus = brWithModified(p, mem, x0 - eps);
+-
+-        if (fplus < 0.0 || fminus < 0.0) {
+-            return 0.0;
+-        }
+-        return (fplus - fminus) / (2.0 * eps);
+-    };
+-
+-    grad.lambda1 = finiteDiff(&ParamSet::lambda1);
+-    grad.lambda2 = finiteDiff(&ParamSet::lambda2);
+-    grad.lambda3 = finiteDiff(&ParamSet::lambda3);
+-    grad.lambda4 = finiteDiff(&ParamSet::lambda4);
+-    grad.lambda5 = finiteDiff(&ParamSet::lambda5);
+-    grad.m12     = finiteDiff(&ParamSet::m12);
+-    grad.beta    = finiteDiff(&ParamSet::beta);
+-
+-    return grad;
+-}
+-
+-ParamSet gradientDescent(const ParamSet &start, double &bestBR, double alpha=0.005, int maxIters=70) {
+-    ParamSet current = start;
+-    bestBR           = computeBRGammaGamma(current);
+-    if (bestBR < 0) {
+-        return current;
+-    }
+-
+-    for (int i = 0; i < maxIters; i++) {
+-        ParamSet g = computeGradient(current, 1e-4);
+-
+-        ParamSet trial = {
+-            current.lambda1 + alpha * g.lambda1,
+-            current.lambda2 + alpha * g.lambda2,
+-            current.lambda3 + alpha * g.lambda3,
+-            current.lambda4 + alpha * g.lambda4,
+-            current.lambda5 + alpha * g.lambda5,
+-            current.m12     + alpha * g.m12,
+-            current.beta    + alpha * g.beta
+-        };
+-
+-        double brNext = computeBRGammaGamma(trial);
+-        if (brNext < 0) {
+-            alpha *= 0.5;
+-        } else {
+-            current = trial;
+-            if (brNext > bestBR) {
+-                bestBR = brNext;
+-            }
+-        }
+-    }
+-    return current;
+-}
+-
+-// globals
+-static ParamSet g_bestParams;
+-static double   g_bestBR = -1.0;
+-
+-static void perform_param_scan_withGD(const Config &cfg, const string &output_file) {
+-    ofstream results(output_file);
+-    if (!results.is_open()) {
+-        cerr << "Failed to open output file: " << output_file << endl;
+-        return;
+-    }
+-
+-    // Define columns, but we'll store only doubles in the row
+-    vector<string> columns = {
+-        "lambda1","lambda2","lambda3","lambda4","lambda5",
+-        "m12_squared","beta","tan_beta",
+-        "positivity_ok","unitarity_ok","perturbativity_ok",
+-        "width_h2_bb","width_h2_tautau","width_h2_WW","width_h2_ZZ","width_hgaga",
+-        "total_width_h2","branching_ratio_hgaga"
+-    };
+-    // This function now presumably writes out column headers (as text).
+-    write_csv_header(results, columns);
+-
+-    double total_iterations = computeTotalIterations(cfg);
+-    double current_iteration = 0.0;
+-    auto start_time = high_resolution_clock::now();
+-
+-    g_bestBR = -1.0;
+-
+-    for (double lambda1 = cfg.lambda1_min; lambda1 <= cfg.lambda1_max; lambda1 += cfg.step_lambda1) {
+-        for (double lambda2 = cfg.lambda2_min; lambda2 <= cfg.lambda2_max; lambda2 += cfg.step_lambda2) {
+-            for (double lambda3 = cfg.lambda3_min; lambda3 <= cfg.lambda3_max; lambda3 += cfg.step_lambda3) {
+-                for (double lambda4 = cfg.lambda4_min; lambda4 <= cfg.lambda4_max; lambda4 += cfg.step_lambda4) {
+-                    for (double lambda5 = cfg.lambda5_min; lambda5 <= cfg.lambda5_max; lambda5 += cfg.step_lambda5) {
+-                        for (double m12 = cfg.m12_squared_min; m12 <= cfg.m12_squared_max; m12 += cfg.step_m12_squared) {
+-                            for (double beta = cfg.beta_min; beta <= cfg.beta_max; beta += cfg.step_beta) {
+-
+-                                current_iteration += 1.0;
+-                                auto now_time = high_resolution_clock::now();
+-                                double elapsed = duration<double>(now_time - start_time).count();
+-                                double progress = (current_iteration / total_iterations);
+-                                print_progress(progress, elapsed, total_iterations, current_iteration);
+-
+-                                // Build model
+-                                THDM model;
+-                                SM sm;
+-                                model.set_SM(sm);
+-
+-                                bool pset = model.set_param_gen(
+-                                    lambda1, lambda2, lambda3, lambda4, lambda5,
+-                                    0.0, 0.0,
+-                                    m12,
+-                                    std::tan(beta)
+-                                );
+-                                if (!pset) continue;
+-
+-                                Constraints check(model);
+-                                bool positivity_ok     = check.check_positivity();
+-                                bool unitarity_ok      = check.check_unitarity();
+-                                bool perturbativity_ok = check.check_perturbativity();
+-
+-                                DecayTable table(model);
+-                                double w_h2_bb     = table.get_gamma_hdd(2, 3, 3);
+-                                double w_h2_tautau = table.get_gamma_hll(2, 3, 3);
+-                                double w_h2_WW     = table.get_gamma_hvv(2, 3);
+-                                double w_h2_ZZ     = table.get_gamma_hvv(2, 2);
+-                                double w_hgaga     = table.get_gamma_hgaga(2);
+-                                double w_total_h2  = table.get_gammatot_h(2);
+-
+-                                // Convert bool -> double (1.0/0.0)
+-                                double pos_val = positivity_ok     ? 1.0 : 0.0;
+-                                double uni_val = unitarity_ok      ? 1.0 : 0.0;
+-                                double per_val = perturbativity_ok ? 1.0 : 0.0;
+-
+-                                double br_hgaga = 0.0;
+-                                if (w_total_h2 > 1e-12) {
+-                                    br_hgaga = w_hgaga / w_total_h2;
+-                                }
+-
+-                                // Build the row as doubles
+-                                vector<double> row;
+-                                row.reserve(columns.size()); // for efficiency
+-
+-                                // scanned params
+-                                row.push_back(lambda1);
+-                                row.push_back(lambda2);
+-                                row.push_back(lambda3);
+-                                row.push_back(lambda4);
+-                                row.push_back(lambda5);
+-                                row.push_back(m12);
+-                                row.push_back(beta);
+-                                row.push_back(std::tan(beta));
+-
+-                                // validity checks as 0/1
+-                                row.push_back(pos_val);
+-                                row.push_back(uni_val);
+-                                row.push_back(per_val);
+-
+-                                // partial widths & total
+-                                row.push_back(w_h2_bb);
+-                                row.push_back(w_h2_tautau);
+-                                row.push_back(w_h2_WW);
+-                                row.push_back(w_h2_ZZ);
+-                                row.push_back(w_hgaga);
+-
+-                                row.push_back(w_total_h2);
+-                                row.push_back(br_hgaga);
+-
+-                                // Now write the row of doubles
+-                                write_csv_row(results, row);
+-
+-                                // track best
+-                                // if (positivity_ok && unitarity_ok && w_total_h2 > 0.0 && !std::isnan(br_hgaga)) {
+-                                if (w_total_h2 > 0.0 && !std::isnan(br_hgaga)) {
+-                                    if (br_hgaga > g_bestBR) {
+-                                        g_bestBR = br_hgaga;
+-                                        g_bestParams = {lambda1, lambda2, lambda3, lambda4, lambda5, m12, beta};
+-                                    }
+-                                }
+-                            }
+-                        }
+-                    }
+-                }
+-            }
+-        }
+-    }
+-
+-    results.close();
+-    cout << "\nGrid search completed. Results saved to " << output_file << endl;
+-
+-    if (g_bestBR <= 0.0) {
+-        cout << "No valid points found in grid. Gradient Descent skipped.\n";
+-        return;
+-    }
+-
+-    cout << "Best BR found in grid: " << g_bestBR << " at beta=" << g_bestParams.beta << "\n"
+-         << "Starting gradient descent...\n";
+-
+-    double alpha      = 0.01;
+-    int    maxIters   = 50;
+-    double bestAfterGD = g_bestBR;
+-
+-    ParamSet finalGD = gradientDescent(g_bestParams, bestAfterGD, alpha, maxIters);
+-
+-    cout << "Gradient Descent done.\n"
+-         << "   Initial BR: " << g_bestBR << "\n"
+-         << "   Final   BR: " << bestAfterGD << "\n"
+-         << "Params after GD:\n"
+-         << "   lambda1=" << finalGD.lambda1 
+-         << ", lambda2=" << finalGD.lambda2
+-         << ", lambda3=" << finalGD.lambda3
+-         << ", lambda4=" << finalGD.lambda4
+-         << ", lambda5=" << finalGD.lambda5
+-         << ", m12="     << finalGD.m12
+-         << ", beta="    << finalGD.beta
+-         << endl;
+-}
+-
+-int main(int argc, char *argv[]) {
+-    if (argc < 3) {
+-        cerr << "Usage: " << argv[0] << " <config_file> <output_csv>\n";
+-        return 1;
+-    }
+-    string config_file = argv[1];
+-    string output_file = argv[2];
+-
+-    try {
+-        Config cfg = readConfig(config_file);
+-        perform_param_scan_withGD(cfg, output_file);
+-    } catch(const exception &e) {
+-        cerr << "Error: " << e.what() << endl;
+-        return 1;
+-    }
+-    return 0;
+-}
+diff --git a/dihiggs/src/ModularParamScan.cpp b/dihiggs/src/ModularParamScan.cpp
+deleted file mode 100644
+index 250674f..0000000
+--- a/dihiggs/src/ModularParamScan.cpp
++++ /dev/null
+@@ -1,301 +0,0 @@
+-#include "THDM.h"
+-#include "Constraints.h"
+-#include "DecayTable.h"
+-#include "ParamUtils.hpp"  // CSV & config utilities
+-#include <iostream>
+-#include <fstream>
+-#include <cmath>
+-#include <chrono>
+-#include <iomanip>
+-#include <omp.h>
+-#include <vector>
+-#include <memory>
+-#include <sstream>
+-
+-using namespace std;
+-using namespace std::chrono;
+-
+-// -----------------------------------------------------------------------------
+-// Estructura para almacenar el conjunto de parámetros
+-// -----------------------------------------------------------------------------
+-struct ParamSet {
+-    double m_phi;
+-    double mA;       // m_A = m_Hp
+-    double alpha;
+-    double beta;
+-    double lambda6;
+-    double lambda7;
+-    double m12;
+-};
+-
+-// -----------------------------------------------------------------------------
+-// Estructura para almacenar los resultados de la evaluación
+-// -----------------------------------------------------------------------------
+-struct EvalResult {
+-    ParamSet params;
+-    double sin_ba;
+-    double tan_beta;
+-    bool positivity_ok;
+-    bool unitarity_ok;
+-    bool perturbativity_ok;
+-    double w_h2_bb;
+-    double w_h2_tautau;
+-    double w_h2_WW;
+-    double w_h2_ZZ;
+-    double w_h2_gaga;
+-    double w_h2_Zga;
+-    double w_h2_gg;
+-    double w_h2_hh;
+-    double w_total_h2;
+-    double br_h2_gaga;
+-};
+-
+-// -----------------------------------------------------------------------------
+-// Clase abstracta para estrategias de muestreo (Sampling)
+-// -----------------------------------------------------------------------------
+-class Sampler {
+-public:
+-    virtual vector<ParamSet> generateSamples(const ConfigPhys &cfg) = 0;
+-    virtual ~Sampler() {}
+-};
+-
+-// -----------------------------------------------------------------------------
+-// Implementación de un muestreo en rejilla (Grid Sampling)
+-// -----------------------------------------------------------------------------
+-class GridSampler : public Sampler {
+-public:
+-    vector<ParamSet> generateSamples(const ConfigPhys &cfg) override {
+-        vector<ParamSet> samples;
+-        // Calcular número de pasos para cada parámetro (con chequeo para step=0)
+-        int steps_lambda6 = (cfg.lambda6_max - cfg.lambda6_min) / cfg.step_lambda6 + 1;
+-        int steps_lambda7 = (cfg.lambda7_max - cfg.lambda7_min) / cfg.step_lambda7 + 1;
+-        int steps_m12     = (cfg.m12_squared_max - cfg.m12_squared_min) / cfg.step_m12_squared + 1;
+-        int steps_alpha   = (cfg.alpha_max - cfg.alpha_min) / cfg.step_alpha + 1;
+-        int steps_beta    = (cfg.beta_max - cfg.beta_min) / cfg.step_beta + 1;
+-        int steps_mphi    = (cfg.mphi_max - cfg.mphi_min) / cfg.step_mphi + 1;
+-        int steps_mA      = (cfg.mA_max - cfg.mA_min) / cfg.step_mA + 1;
+-
+-        if (cfg.step_lambda6 == 0.0) steps_lambda6 = 1;
+-        if (cfg.step_lambda7 == 0.0) steps_lambda7 = 1;
+-        if (cfg.step_m12_squared == 0.0) steps_m12 = 1;
+-        if (cfg.step_alpha == 0.0) steps_alpha = 1;
+-        if (cfg.step_beta == 0.0) steps_beta = 1;
+-        if (cfg.step_mphi == 0.0) steps_mphi = 1;
+-        if (cfg.step_mA == 0.0) steps_mA = 1;
+-
+-        // Generación del grid mediante bucles anidados
+-        for (int i_l6 = 0; i_l6 < steps_lambda6; i_l6++) {
+-            double lambda6 = cfg.lambda6_min + i_l6 * cfg.step_lambda6;
+-            for (int i_l7 = 0; i_l7 < steps_lambda7; i_l7++) {
+-                double lambda7 = cfg.lambda7_min + i_l7 * cfg.step_lambda7;
+-                for (int i_m12 = 0; i_m12 < steps_m12; i_m12++) {
+-                    double m12 = cfg.m12_squared_min + i_m12 * cfg.step_m12_squared;
+-                    for (int i_alpha = 0; i_alpha < steps_alpha; i_alpha++) {
+-                        double alpha = cfg.alpha_min + i_alpha * cfg.step_alpha;
+-                        for (int i_beta = 0; i_beta < steps_beta; i_beta++) {
+-                            double beta = cfg.beta_min + i_beta * cfg.step_beta;
+-                            for (int i_mphi = 0; i_mphi < steps_mphi; i_mphi++) {
+-                                double m_phi = cfg.mphi_min + i_mphi * cfg.step_mphi;
+-                                for (int i_mA = 0; i_mA < steps_mA; i_mA++) {
+-                                    double mA = cfg.mA_min + i_mA * cfg.step_mA;
+-                                    ParamSet ps = { m_phi, mA, alpha, beta, lambda6, lambda7, m12 };
+-                                    samples.push_back(ps);
+-                                }
+-                            }
+-                        }
+-                    }
+-                }
+-            }
+-        }
+-        return samples;
+-    }
+-};
+-
+-// -----------------------------------------------------------------------------
+-// Función para evaluar un conjunto de parámetros (cada punto de la búsqueda)
+-// -----------------------------------------------------------------------------
+-EvalResult evaluateParamSet(const ParamSet &ps) {
+-    EvalResult res;
+-    res.params = ps;
+-    res.sin_ba = sin(ps.beta - ps.alpha);
+-    res.tan_beta = tan(ps.beta);
+-
+-    // Construir el modelo 2HDM y fijar parámetros físicos
+-    THDM model;
+-    SM sm;
+-    model.set_SM(sm);
+-    double m_h = 125.0;     // Fijamos m_h
+-    double m_Hp = ps.mA;    // Condición: m_A = m_Hp
+-    // pset se usaba para comprobar si set_param_phys se realizó correctamente
+-    // Lo dejamos comentado si no lo necesitamos en este momento
+-    bool success = model.set_param_phys(m_h, ps.m_phi, ps.mA, m_Hp, res.sin_ba, ps.lambda6, ps.lambda7, ps.m12, res.tan_beta);
+-    // (void)success; // Para silenciar 'unused variable' si no lo usas
+-
+-    // Chequear condiciones físicas
+-    Constraints check(model);
+-    res.positivity_ok     = check.check_positivity();
+-    res.unitarity_ok      = check.check_unitarity();
+-    res.perturbativity_ok = check.check_perturbativity();
+-
+-    // Calcular anchos de decaimiento
+-    DecayTable table(model);
+-    res.w_h2_bb     = table.get_gamma_hdd(2, 3, 3);
+-    res.w_h2_tautau = table.get_gamma_hll(2, 3, 3);
+-    res.w_h2_WW     = table.get_gamma_hvv(2, 3);
+-    res.w_h2_ZZ     = table.get_gamma_hvv(2, 2);
+-    res.w_h2_gaga   = table.get_gamma_hgaga(2);
+-    res.w_h2_Zga    = table.get_gamma_hZga(2);
+-    res.w_h2_gg     = table.get_gamma_hgg(2);
+-    res.w_h2_hh     = table.get_gamma_hhh(2, 1, 1);
+-    res.w_total_h2  = table.get_gammatot_h(2);
+-    res.br_h2_gaga  = (res.w_total_h2 > 1e-12) ? res.w_h2_gaga / res.w_total_h2 : 0.0;
+-
+-    return res;
+-}
+-
+-// -----------------------------------------------------------------------------
+-// Función para escribir una fila de resultados en CSV
+-// -----------------------------------------------------------------------------
+-void writeCSVRow(ofstream &ofs, const EvalResult &res) {
+-    ofs << res.params.m_phi << ","
+-        << res.params.mA << ","
+-        << res.params.alpha << ","
+-        << res.params.beta << ","
+-        << res.params.lambda6 << ","
+-        << res.params.lambda7 << ","
+-        << res.params.m12 << ","
+-        << res.sin_ba << ","
+-        << res.tan_beta << ","
+-        << (res.positivity_ok ? 1 : 0) << ","
+-        << (res.unitarity_ok ? 1 : 0) << ","
+-        << (res.perturbativity_ok ? 1 : 0) << ","
+-        << res.w_h2_bb << ","
+-        << res.w_h2_tautau << ","
+-        << res.w_h2_WW << ","
+-        << res.w_h2_ZZ << ","
+-        << res.w_h2_gaga << ","
+-        << res.w_h2_Zga << ","
+-        << res.w_h2_gg << ","
+-        << res.w_h2_hh << ","
+-        << res.w_total_h2 << ","
+-        << res.br_h2_gaga << "\n";
+-}
+-
+-// -----------------------------------------------------------------------------
+-// Función principal de escaneo: usa la estrategia de muestreo pasada para generar
+-// los puntos y luego evalúa cada uno en paralelo (OpenMP)
+-// -----------------------------------------------------------------------------
+-void perform_param_scan(const ConfigPhys &cfg, const string &output_file, Sampler &sampler) {
+-    // Abrir archivo CSV para resultados
+-    ofstream results(output_file.c_str());
+-    if (!results.is_open()) {
+-        cerr << "Failed to open output file: " << output_file << endl;
+-        return;
+-    }
+-    // Escribir cabecera del CSV
+-    results << "m_phi,mA,alpha,beta,lambda6,lambda7,m12,sin_ba,tan_beta,positivity_ok,unitarity_ok,perturbativity_ok,"
+-            << "w_h2_bb,w_h2_tautau,w_h2_WW,w_h2_ZZ,w_h2_gaga,w_h2_Zga,w_h2_gg,w_h2_hh,w_total_h2,br_h2_gaga\n";
+-
+-    // Generar muestras usando la estrategia de muestreo definida
+-    vector<ParamSet> samples = sampler.generateSamples(cfg);
+-    cout << "Total samples generated: " << samples.size() << "\n";
+-
+-    // Variables para seguimiento del mejor resultado global
+-    double global_bestBR = -1.0;
+-    ParamSet global_bestParams;
+-    auto start_time = high_resolution_clock::now();
+-
+-    // Evaluar cada muestra en paralelo usando OpenMP
+-    #pragma omp parallel
+-    {
+-        vector<string> thread_local_results;
+-        double local_bestBR = -1.0;
+-        ParamSet local_bestParams;
+-
+-        #pragma omp for schedule(dynamic)
+-        for (size_t i = 0; i < samples.size(); i++) {
+-            EvalResult res = evaluateParamSet(samples[i]);
+-            // Preparar la fila CSV para esta muestra
+-            ostringstream oss;
+-            oss << fixed << setprecision(8)
+-                << res.params.m_phi << ","
+-                << res.params.mA << ","
+-                << res.params.alpha << ","
+-                << res.params.beta << ","
+-                << res.params.lambda6 << ","
+-                << res.params.lambda7 << ","
+-                << res.params.m12 << ","
+-                << res.sin_ba << ","
+-                << res.tan_beta << ","
+-                << (res.positivity_ok ? 1 : 0) << ","
+-                << (res.unitarity_ok ? 1 : 0) << ","
+-                << (res.perturbativity_ok ? 1 : 0) << ","
+-                << res.w_h2_bb << ","
+-                << res.w_h2_tautau << ","
+-                << res.w_h2_WW << ","
+-                << res.w_h2_ZZ << ","
+-                << res.w_h2_gaga << ","
+-                << res.w_h2_Zga << ","
+-                << res.w_h2_gg << ","
+-                << res.w_h2_hh << ","
+-                << res.w_total_h2 << ","
+-                << res.br_h2_gaga;
+-
+-            thread_local_results.push_back(oss.str());
+-
+-            // Actualizar el mejor resultado local (si cumple condiciones)
+-            if (res.positivity_ok && res.w_total_h2 > 0.0 && res.br_h2_gaga > local_bestBR) {
+-                local_bestBR = res.br_h2_gaga;
+-                local_bestParams = samples[i];
+-            }
+-        }
+-
+-        // Sección crítica: escribir resultados del hilo al archivo global y actualizar el mejor global
+-        #pragma omp critical
+-        {
+-            for (size_t j = 0; j < thread_local_results.size(); j++) {
+-                results << thread_local_results[j] << "\n";
+-            }
+-            if (local_bestBR > global_bestBR) {
+-                global_bestBR = local_bestBR;
+-                global_bestParams = local_bestParams;
+-            }
+-        }
+-    } // Fin del paralelo
+-
+-    results.close();
+-    auto elapsed = duration<double>(high_resolution_clock::now() - start_time).count();
+-    cout << "Scan completed in " << elapsed << " seconds." << endl;
+-    cout << "Best BR(h->gaga): " << global_bestBR << " found at parameters:" << endl;
+-    cout << " m_phi: " << global_bestParams.m_phi 
+-         << ", mA: " << global_bestParams.mA 
+-         << ", alpha: " << global_bestParams.alpha 
+-         << ", beta: " << global_bestParams.beta 
+-         << ", lambda6: " << global_bestParams.lambda6 
+-         << ", lambda7: " << global_bestParams.lambda7 
+-         << ", m12: " << global_bestParams.m12 << endl;
+-}
+-
+-int main(int argc, char *argv[]) {
+-    if (argc < 3) {
+-        cerr << "Usage: " << argv[0] << " <config_file> <output_csv>\n";
+-        return 1;
+-    }
+-    string config_file = argv[1];
+-    string output_file = argv[2];
+-
+-    try {
+-        ConfigPhys cfg = readPhysConfig(config_file);
+-
+-        // Crear un Sampler con new en vez de make_unique (C++11 compatible)
+-        unique_ptr<Sampler> sampler(new GridSampler());
+-
+-        // Ejecutar el escaneo con la estrategia de muestreo seleccionada
+-        perform_param_scan(cfg, output_file, *sampler);
+-
+-    } catch (const exception &e) {
+-        cerr << "Error: " << e.what() << endl;
+-        return 1;
+-    }
+-    return 0;
+-}
+diff --git a/dihiggs/src/PhysScanPolynomial.cpp b/dihiggs/src/PhysScanPolynomial.cpp
+deleted file mode 100644
+index 8d08c0b..0000000
+--- a/dihiggs/src/PhysScanPolynomial.cpp
++++ /dev/null
+@@ -1,325 +0,0 @@
+-/**
+- * @file PhysScanWithFixings.cpp
+- * @brief Escaneo de parámetros m_phi y m12 con parámetros físicos fijos.
+- *
+- * Este programa recorre un rango de valores de m_phi y m12, mientras
+- * mantiene los demás parámetros del 2HDM (mA, sin(b−a), tanβ, λ6, λ7) fijos.
+- * Para cada punto calcula condiciones de positividad, unitariedad y perturbatividad,
+- * construye la tabla de decaimientos y guarda en CSV:
+- *   m_phi, mA, α, β, λ6, λ7, m12,
+- *   sin(b−a), tanβ,
+- *   positivity_ok, unitarity_ok, perturbativity_ok,
+- *   widths de bb, ττ, WW, ZZ, γγ, Zγ, gg, hh,
+- *   total_width, BR(h→γγ).
+- *
+- * Uso:
+- *   ./PhysScanWithFixings
+- *    <base model> <N_mphi> <N_m12> <delta_m12>
+- *     <output_csv>
+- *
+- * Paralelización:
+- *   Usa OpenMP para distribuir el bucle 2D de (m_phi × m12) 
+- *   y aprovecha la informacion previa para explorar alrededor de los mejores puntos.
+- *
+- * Dependencias:
+- *   - Biblioteca 2HDMC (–l2HDMC)
+- *   - GSL (–lgsl –lgslcblas –lm)
+- *   - OpenMP
+- *
+- * Autor: Fabian Trigo
+- * Fecha: agosto 2025
+- *
+- *
+- *
+-*/
+-
+-// activa el chequeo acelerado de lam1, lam2
+-#define SPEED_TEST
+-
+-#include "THDM.h"
+-#include "Constraints.h"
+-#include "DecayTable.h"
+-#include "ParamUtils.hpp"  // CSV & config utilities
+-#include <iostream>
+-#include <fstream>
+-#include <cmath>
+-#include <iomanip>
+-#include <omp.h>
+-#include <cmath>
+-
+-
+-#include <chrono>
+-using Clock = std::chrono::high_resolution_clock;
+-using Duration = std::chrono::duration<double>;
+-
+-
+-using namespace std;
+-using namespace std::chrono;
+-
+-
+-// Estructura para resultados
+-struct ParamSet {
+-    double m_phi, mA, alpha, beta, lambda6, lambda7, m12;
+-};
+-
+-
+-//static ParamSet g_bestParams;
+-static double   g_bestBR = -1.0;
+-const double VEV = 246.0;
+-
+-void perform_param_scan_polynomial(
+-    double mphi_min, double mphi_max, int N_mphi,
+-    double a, double b, double c, int delta_m12_exp,
+-    double m12_min,  double m12_max,  int N_m12,
+-    double mA_fixed, double sin_ba,   double tan_beta,
+-    double lambda6,  double lambda7,
+-    const string &output_file
+-) {
+-    ofstream results(output_file);
+-    if (!results.is_open()) {
+-        cerr << "No pude abrir: " << output_file << endl;
+-        return;
+-    }
+-    // Cabecera CSV
+-    vector<string> columns = {
+-        "m_phi","mA","alpha","beta","lambda6","lambda7","m12",
+-        "sin_ba","tan_beta","positivity_ok","unitarity_ok","perturbativity_ok",
+-        "width_bb","width_tautau","width_WW","width_ZZ",
+-        "width_gaga","width_Zga","width_gg","width_hh",
+-        "total_width","br_gaga", "lam1", "computed_lam1", "lam2","computed_lam2", "lam3", "lam4", "lam5"
+-    };
+-    write_csv_header(results, columns);
+-
+-    // Calcular pasos
+-    double step_mphi = (N_mphi > 1) ? (mphi_max - mphi_min)/(N_mphi - 1) : 0.0;
+-
+-    double total_iters = double(N_mphi) * double(N_m12);
+-    int iters_done  = 0;
+-    int iters_jumped = 0;
+-
+-    cout << "step_mphi="<<step_mphi<<endl;
+-
+-    auto start = Clock::now();
+-
+-    g_bestBR = -1.0;
+-
+-    // fixed param, known higgs
+-    double mh = 125.0;
+-
+-    double inv = 1.0/std::sqrt(1.0 + tan_beta*tan_beta);
+-    double cb  = inv;
+-    double sb  = tan_beta * inv;
+-    double cba = std::sqrt(1.0 - sin_ba*sin_ba);
+-
+-    double ca = cb * cba + sb * sin_ba;
+-    double sa = sb * cba - cb * sin_ba;
+-    double beta  = std::atan(tan_beta);
+-    double alpha = beta - std::asin(sin_ba);
+-
+-    //#pragma omp for collapse(2) schedule(dynamic)
+-    #pragma omp parallel for schedule(dynamic)
+-    for(int i_phi = 0; i_phi < N_mphi; ++i_phi) {
+-        double m_phi = mphi_min + i_phi * step_mphi;
+-        for(int i_m12 = 0; i_m12 < N_m12; ++i_m12) { // controla dispersion alrededor
+-
+-            vector<vector<double>> buffer;
+-            double local_bestBR = -1.0;
+-            ParamSet local_bestParams;
+-            
+-            double m12_pol = a * m_phi * m_phi + b * m_phi + c ;//define el punto polinomial predichp
+-            
+-            // Calcular delta_m12
+-            double delta_m12 = (2 * a * m_phi + b) * m_phi; // derivada del polinomio en m_phi
+-            
+-            delta_m12 = delta_m12 *  std::pow(10, - delta_m12_exp); // usamos el modific
+-
+-            double m12   = m12_pol - 0.5 * N_m12 * delta_m12  + i_m12 * delta_m12;
+-            
+-            
+-            double l1 = calc_lambda1(mh, m_phi, m12, sa, ca, sb, cb, tan_beta, lambda6, lambda7, VEV);
+-            double l2 = calc_lambda2(mh, m_phi, m12, sa, ca, sb, cb, tan_beta, lambda6, lambda7, VEV);
+-
+-
+-            #ifdef DEBUG
+-                cout << "m12:" << m12 << "l1,l2" << l1 << "," << l2 << endl;
+-            #endif
+-
+-            #ifdef SPEED_TEST
+-            // Filtrado rápido, el counter puede no ser representativo al ser paralelizado
+-            // y presentar condiciones de carrera.
+-            if (!check_lambda(l1) ||
+-                !check_lambda(l2) ) {
+-                iters_jumped++; 
+-                continue;
+-            }
+-            #endif
+-
+-
+-            // Construir modelo
+-            THDM model;
+-            SM sm; model.set_SM(sm);
+-            bool ok = model.set_param_phys(
+-                mh,         // m_h fijo
+-                m_phi,
+-                mA_fixed,
+-                mA_fixed,     // mA = mHp
+-                sin_ba,
+-                lambda6,
+-                lambda7,
+-                m12,
+-                tan_beta
+-            );
+-            model.set_yukawas_type(1); // Habrán warnings debido a que type 1 considera que lambda6 y lambda7 son 0.
+-            double lam1, lam2, lam3, lam4, lam5, lam6_g, lam7_g, m12_2_g, tanb_g;
+-            model.get_param_gen( lam1, lam2, lam3, lam4, lam5, lam6_g, lam7_g, m12_2_g, tanb_g);
+-
+-            if (!ok) {
+-                continue;
+-            }
+-
+-            Constraints check(model);
+-            bool pos = check.check_positivity();
+-            bool uni = check.check_unitarity();
+-            bool pert = check.check_perturbativity();
+-
+-            DecayTable tab(model);
+-            double w_bb    = tab.get_gamma_hdd(2,3,3);
+-            double w_tautau= tab.get_gamma_hll(2,3,3);
+-            double w_WW    = tab.get_gamma_hvv(2,3);
+-            double w_ZZ    = tab.get_gamma_hvv(2,2);
+-            double w_gaga  = tab.get_gamma_hgaga(2);
+-            double w_Zga   = tab.get_gamma_hZga(2);
+-            double w_gg    = tab.get_gamma_hgg(2);
+-            double w_hh    = tab.get_gamma_hhh(2,1,1);
+-            double w_tot   = tab.get_gammatot_h(2);
+-            // cout << "w_tot" << w_tot << endl;
+-            double br_gaga = (w_tot > 1e-15) ? w_gaga / w_tot : 0.0;
+-
+-            double beta  = std::atan(tan_beta);
+-            double alpha = beta - std::asin(sin_ba);
+-
+-            // Guardar fila
+-            buffer.push_back( std::vector<double>{
+-                m_phi, mA_fixed, alpha, beta, lambda6, lambda7, m12,
+-                sin_ba, tan_beta,
+-                pos?1.0:0.0, uni?1.0:0.0, pert?1.0:0.0,
+-                w_bb, w_tautau, w_WW, w_ZZ,
+-                w_gaga, w_Zga, w_gg, w_hh,
+-                w_tot, br_gaga, lam1, l1, lam2, l2, lam3, lam4, lam5
+-            });
+-
+-            // // Actualizar mejor BR local
+-            // if (pos && w_tot>0.0 && br_gaga > local_bestBR) {
+-            //     local_bestBR = br_gaga;
+-            //     local_bestParams = {m_phi, mA_fixed, 0., 0., lambda6, lambda7, m12};
+-            // }
+-
+-
+-            #pragma omp critical
+-            {
+-                // 1) Capturamos cuántas filas vamos a procesar
+-                double n = static_cast<double>(buffer.size());
+-
+-                // 2) Volcamos el buffer al CSV
+-                for (auto &row : buffer) {
+-                    write_csv_row(results, row);
+-                }
+-
+-                // 3) Actualizamos el contador global antes de limpiar
+-                iters_done += n;
+-
+-                // 4) Limpiamos el buffer
+-                buffer.clear();
+-
+-                // 5) Calculamos y mostramos progreso, elapsed y ETA
+-                auto now     = high_resolution_clock::now();
+-                double elapsed = duration<double>(now - start).count();
+-                double prog    = (iters_done / total_iters) * 100.0;
+-                double eta     = (iters_done > 0.0)
+-                                ? (elapsed / iters_done) * (total_iters - iters_done)
+-                                : 0.0;
+-
+-                std::cerr << fixed << setprecision(1)
+-                        << "Iter: "    << iters_done
+-                        << "/"          << total_iters
+-                        << " ("         << prog << "%)  "
+-                        << "elapsed: "  << elapsed << " s  "
+-                        << "ETA: "      << eta     << " s  "
+-                        << "Omited iterations: " << iters_jumped << "\r";
+-            }
+-        }
+-    } // end parallel
+-
+-    results.close();
+-    cout << "\n\nEscaneo completo. Best br_gaga="<<g_bestBR<<endl;
+-
+-    #ifdef SPEED_TEST
+-    auto end = Clock::now();
+-    double secs = Duration(end - start).count();
+-    std::cerr << "== Speed test: tiempo total de escaneo = "
+-              << secs << " s ==\n";
+-    #endif
+-}
+-
+-// ---
+-
+-int main(int argc, char* argv[]) {
+-    if (argc < 3) {
+-        std::cerr << "Uso: " << argv[0] << " <config.json> <output_csv> <opt delta mod> <opt N m_12>\n";
+-        return 1;
+-    }
+-    
+-    std::string config_file = argv[1];
+-    std::string output_csv  = argv[2];
+-
+-    // Estructuras definidas en ParamUtils.hpp
+-    QuadraticModel   qm;
+-    SearchSettings   ss;
+-    FixedParameters  fp;
+-
+-    // Carga de configuración JSON
+-    try {
+-        parse_json_config(config_file, qm, ss, fp);
+-    } catch (const std::exception &e) {
+-        std::cerr << "Error leyendo configuración: " << e.what() << std::endl;
+-        return 1;
+-    }
+-
+-
+-    // Si se pasa un tercer argumento, lo usamos como modifier de delta_m12
+-    int delta_m12_exp = 1;
+-    if (argc > 3) {
+-        delta_m12_exp = atoi(argv[3]);
+-        cout << "delta_m12_exp = " << delta_m12_exp << endl;
+-
+-        if (argc > 4) {
+-            ss.N_m12 = atoi(argv[4]);
+-            cout << "N_m12 = " << ss.N_m12 << endl;
+-        }
+-    }
+-
+-    
+-    double m_phi_mean = (130.0 + 300.0) / 2.0;
+-    cout << "delta_m12 app = " << (2 * qm.a * m_phi_mean + qm.b )*m_phi_mean *  std::pow(10, - delta_m12_exp) << endl;
+-
+-
+-    // Ejecución del escaneo usando los valores del JSON
+-    perform_param_scan_polynomial(
+-        /* mphi_min   */  130.0,
+-        /* mphi_max   */ 300.0,
+-        /* N_mphi     */ ss.N_mphi , // multiplicamos por 10 para mayor resolución
+-        qm.a, qm.b, qm.c, // polynomial information
+-        delta_m12_exp,
+-        /* m12_min    */ ss.m12_min,
+-        /* m12_max    */ ss.m12_max,
+-        /* N_m12      */ ss.N_m12 , // multiplicamos por 10 para mayor resolución
+-        /* mA_fixed   */ fp.mA,
+-        /* sin_ba     */ fp.sin_ba,
+-        /* tan_beta   */ fp.tan_beta,
+-        /* lambda6    */ fp.lambda6,
+-        /* lambda7    */ fp.lambda7,
+-        /* output CSV */ output_csv
+-    );
+-
+-    return 0;
+-}
+diff --git a/dihiggs/src/testing.cpp b/dihiggs/src/testing.cpp
+deleted file mode 100644
+index 197d06d..0000000
+--- a/dihiggs/src/testing.cpp
++++ /dev/null
+@@ -1,145 +0,0 @@
+-
+-/*
+-Este codigo de testing es ideal para probar el archivo de configuración y además hacer pruebas si existen probelmas de escreibir datos
+-permitiendo mayor cantidad de debugging
+-*/
+-#include "THDM.h"
+-#include "Constraints.h"
+-#include "DecayTable.h"
+-#include "ParamUtils.hpp"  // Header común
+-
+-#include <iostream>
+-#include <fstream>
+-#include <cmath>
+-#include <chrono>
+-
+-using namespace std;
+-using namespace std::chrono;
+-
+-int main()
+-{
+-    try
+-    {
+-        string output_file = "testing.csv";
+-        ofstream results(output_file);
+-        if (!results.is_open()) {
+-            cerr << "Failed to open output file: " << output_file << endl;
+-        }
+-
+-        // Columnas CSV
+-        vector<string> columns = {
+-            "lambda1", "lambda2", "lambda3", "lambda4", "lambda5",
+-            "m12_squared", "beta", "tan_beta",
+-            "width_hgaga", "total_width_h2", "branching_ratio_hgaga"
+-        };
+-        write_csv_header(results, columns);
+-
+-
+-        // 1. Leer archivo de configuración
+-        Config cfg = readConfig("test_parametros.conf");
+-
+-        // 2. Calcular total de iteraciones
+-        double total_iterations = computeTotalIterations(cfg);
+-        cout << "Total de iteraciones: " << total_iterations << endl;
+-
+-        double current_iteration = 0.0;
+-        auto start_time = high_resolution_clock::now();
+-        // 3. Recorrer los bucles usando los valores del cfg
+-        for(double lambda1 = cfg.lambda1_min; lambda1 <= cfg.lambda1_max; lambda1 += cfg.step_lambda1)
+-        {
+-            for(double lambda2 = cfg.lambda2_min; lambda2 <= cfg.lambda2_max; lambda2 += cfg.step_lambda2)
+-            {
+-                for(double lambda3 = cfg.lambda3_min; lambda3 <= cfg.lambda3_max; lambda3 += cfg.step_lambda3)
+-                {
+-                    for(double lambda4 = cfg.lambda4_min; lambda4 <= cfg.lambda4_max; lambda4 += cfg.step_lambda4)
+-                    {
+-                        for(double lambda5 = cfg.lambda5_min; lambda5 <= cfg.lambda5_max; lambda5 += cfg.step_lambda5)
+-                        {
+-                            for(double m12 = cfg.m12_squared_min; 
+-                                        m12 <= cfg.m12_squared_max; 
+-                                        m12 += cfg.step_m12_squared)
+-                            {
+-                                for(double beta = cfg.beta_min; beta <= cfg.beta_max; beta += cfg.step_beta)
+-                                {
+-                                    // Aquí hacemos lo que necesitemos con los parámetros (lambda1, lambda2, etc.)
+-                                    // ...
+-                                    current_iteration += 1.0;
+-                                    auto now_time = high_resolution_clock::now();
+-                                    double elapsed = duration<double>(now_time - start_time).count();
+-                                    double progress = (current_iteration / total_iterations);
+-                                    print_progress(progress, elapsed, total_iterations, current_iteration);
+-
+-                                    // Chequeo de positividad
+-                                    if (!check_positivity(lambda1, lambda2, lambda3, lambda4, lambda5)) {
+-                                        continue;
+-                                    }
+-
+-                                    // Inicializar modelo 2HDMC
+-                                    THDM model;
+-                                    SM sm;
+-                                    model.set_SM(sm);
+-
+-                                    bool pset = model.set_param_gen(
+-                                        lambda1, lambda2, lambda3, lambda4, lambda5,
+-                                        0.0, 0.0,  // lambda6, lambda7 = 0
+-                                        m12,       // m12^2
+-                                        tan(beta)  // tan_beta
+-                                    );
+-                                    if (!pset) {
+-                                        continue;
+-                                    }
+-
+-                                    Constraints check(model);
+-                                    //if (!check.check_positivity() || !check.check_unitarity() || !check.check_perturbativity()) {
+-                                    if (!check.check_positivity() || !check.check_unitarity()) {
+-                                            std::cout << "DEBUG: Falla check_positivity con: "
+-                                            << lambda1 << "," << lambda2 << "," << lambda3 << "," 
+-                                            << lambda4 << "," << lambda5 << std::endl;
+-                                        continue;
+-                                    }
+-
+-                                    DecayTable table(model);
+-                                    double width_hgaga = table.get_gamma_hgaga(2); // H2 -> gamma gamma
+-                                    double total_w_h2  = table.get_gammatot_h(2);
+-
+-                                    // validación para posibles nan
+-                                    // if (std::isnan(width_hgaga) || std::isnan(total_w_h2) || total_w_h2 <= 0.0) {
+-                                    //     continue;
+-                                    // }
+-
+-                                    double br_hgaga = width_hgaga / total_w_h2;
+-
+-                                    // Guardar resultados
+-                                    vector<double> row = {
+-                                        lambda1, lambda2, lambda3, lambda4, lambda5,
+-                                        m12, beta, tan(beta),
+-                                        width_hgaga, total_w_h2, br_hgaga
+-                                    };
+-                                    write_csv_row(results, row);
+-
+-
+-
+-                                    // Actualizamos el contador
+-                                    current_iteration++;
+-                                    // (Opcional) imprimir avance cada cierto número de iteraciones
+-                                    if (fmod(current_iteration, 100000) == 0) {
+-                                        cout << "Progreso: " << (current_iteration / total_iterations) * 100.0
+-                                             << "%\r" << flush;
+-                                    }
+-                                }
+-                            }
+-                        }
+-                    }
+-                }
+-            }
+-        }
+-
+-        cout << "\nFinalizado. Iteraciones totales procesadas: " << current_iteration << endl;
+-    }
+-    catch(const exception &e)
+-    {
+-        cerr << "Error: " << e.what() << endl;
+-    }
+-
+-    return 0;
+-}
+diff --git a/docs/PHYSICS_AUTHORITY_DISCREPANCY_LEDGER.md b/docs/PHYSICS_AUTHORITY_DISCREPANCY_LEDGER.md
+index 5dbd586..31b7cc9 100644
+--- a/docs/PHYSICS_AUTHORITY_DISCREPANCY_LEDGER.md
++++ b/docs/PHYSICS_AUTHORITY_DISCREPANCY_LEDGER.md
+@@ -1,131 +1,40 @@
+-# Physics authority discrepancy and supersession ledger
++# Physics authority and downstream migration ledger
+ 
+-Audit date: 2026-09-07  
++Status date: 2026-10-21
+ Authority: [`conventions/physics_conventions.yaml`](../conventions/physics_conventions.yaml)  
+-Scope: the five active repositories at the audited `main` commits below
++Authority snapshot: `dihiggs@087ba246e9a9fa34b16249b52629a62703893b5c`, SHA-256 `4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6`.
+ 
+-This ledger records disagreement; it does not rewrite frozen artifacts. A row
+-marked `superseded_for_new_production` remains valid for exact historical replay
+-when its original convention and provenance are retained.
++The canonical YAML is owned by `dihiggs`. Downstream repositories carry byte-identical caches and `conventions/physics_conventions.lock.yaml` provenance sidecars. A cache cannot become authoritative because it is newer or locally edited. This ledger tracks migration status and historical conflicts; it does not authorize changing frozen outputs.
+ 
+-## Status vocabulary
++## Current convention
+ 
+-| Status | Meaning |
+-|---|---|
+-| `authoritative` | Governs new production after merge |
+-| `aligned_non_authoritative` | Semantically agrees but does not own the quantity |
+-| `superseded_for_new_production` | Retained for replay; cannot govern a new run |
+-| `migration_required` | Active code/document must be updated before producing under v3 |
+-| `incorrect_claim` | Statement is factually wrong and must not be propagated |
++The active v3 value for new production is the decimal string `m_h = "125.20"` GeV, convention ID `mh_125p20_active_2026`. This is an adopted project convention, not an external measurement attribution. The source repository's committed YAML bytes are the checksum authority. The current workspace pins that source commit.
+ 
+-## `fbientrigo/dihiggs`
++The `physical_2HDM` trilinear is signed. A v3 consumer uses `g_physical_hphiphi_GeV`, verifies consistency with the raw 2HDMC fields and magnitude compatibility field, and maps `GHphiphi = -g_physical_hphiphi_GeV`. The two effective prescriptions have unresolved UFO mappings and remain unsupported in sign-sensitive production. Missing or inconsistent metadata fails closed.
+ 
+-Audited `main`: `2264ffe1b8d8f59bec69341d6aa1a917396ccb2b`
++## Migration status
+ 
+-| File | Observation | Status under v3 | Required migration |
+-|---|---|---|---|
+-| `conventions/physics_conventions.yaml` | v1 omits `m_h`, uses ambiguous `H` for PDG 35, and describes three byte-identical copies as co-authorities | `authoritative` after this change | Replace with v3; `dihiggs` becomes the only owner |
+-| `external_tools.lock.yaml` | Pins the v1 MD5 and byte-identical-copy model | `migration_required` | Pin canonical v3 with SHA-256; downstream provenance moves to sidecars |
+-| `tests/test_external_tools.py` | Enforces the obsolete MD5/co-authority policy | `migration_required` | Test v3 authority and SHA-256 instead |
+-| `tests/test_physics_conventions.py` | Parses constants but does not test schema or physics semantics | `migration_required` | Add v3 schema and semantic invariants |
+-| `docs/inter_repo_communication_assessment.md` | Records the former three-copy/MD5 design as current | `superseded_for_new_production` | Add an authority notice; retain the assessment as design history |
+-| `README.md` | Smoke/orchestrator examples now name the v3 authority and distinguish direct-evaluator `--mh` from wrapper resolution | `aligned_non_authoritative` | Keep historical examples labelled if added |
+-| `docs/contracts/canonical_evaluators_v2.md` | Describes direct `--mh` requirement and manifest provenance for both canonical orchestrators | `aligned_non_authoritative` | Preserve explicit historical replay interface when introduced |
+-| `docs/HIGH_MASS_H2_CONTRACT.md` and high-mass templates | Uses v3 125.13 provenance; correctly labels Z2 semantics and campaign choices | `aligned_non_authoritative` | Preserve pilot bytes and keep future campaign manifests provenance-complete |
+-| `dihiggs/app/orchestrator/physics_authority.py`, `cli.py`, `manifest.py`, `engines/m2.py`, `engines/m2_tracker.py` | v3 producer path reads the active contract, records ID/schema/repository/commit/path/SHA-256, and rejects an unlabelled mass override | `aligned_non_authoritative` | Keep explicit historical replay separate from this new-production path |
+-| `docs/campaigns/high_mass_h2_physical_point_scan_v2_mh12520/` | A 125.20 recalculation exists in repository history but is not present at audited `main` | non-authoritative evidence | Do not infer authority from an unmerged/newer artifact; promote only through normal review |
++| Repository | Current status | Remaining boundary |
++|---|---|---|
++| `dihiggs` | Authority owner; v3 canonical YAML and evaluator provenance | Preserve the canonical file and its attestation; reconcile further changes only through its owner. |
++| `dihiggs_boundary` | v3 controlled cache, sidecar, and checksum lock; new adaptive/profiled handoffs use core provenance | The `evaluate_point_v1` / Atlas v0 runner and its 125.09 HiggsSignals reference are replay-only. Do not change its golden outputs. |
++| `dihiggs_hep_cross` | v3 cache and sidecar; constants loader fails closed; driver/banner use signed physical mapping for provenance-bearing v3 points | Effective prescriptions remain unsupported; no MadGraph results are promoted. |
++| `dihiggs_ufo` | v3 controlled cache and provenance sidecar | Frozen Pack B builders remain historical; add no v3/effective mapping claim without a separately validated UFO change. |
++| `dihiggs_llp_recast` | v3 controlled cache and provenance sidecar | New sample manifests must retain incoming point convention provenance; frozen response results remain historical. |
+ 
+-## `fbientrigo/dihiggs_ufo`
++## Historical preservation
+ 
+-Audited `main`: `7dd02c14e2314f9d172a0782d7860826a52600d6`
++The old migration inventories below were generated against earlier branch snapshots and must not be treated as current instructions. They are retained in Git history only; their assertions that the authority should return to 125.13 or that 125.20 was a PDG measurement are superseded.
+ 
+-| File | Observation | Status under v3 | Required migration |
+-|---|---|---|---|
+-| `docs/PHYSICAL_POINT_UFO_HANDOFF.md` | Correctly assigns stage ownership, but says `125.20` is the PDG 2026 value and claims byte-identical v2 copies in three repos | `incorrect_claim` plus `migration_required` | Cite the adopted PDG 2026 `125.13` convention, consume v3 provenance, and remove co-authority wording |
+-| `README.md` | Describes the repository as owning MadGraph integration and reports `Recast: NOT_RUN`, which is only local Pack status and can be mistaken for project-wide state | `migration_required` | Narrow the repository role to UFO/model implementation; link external stage authorities rather than restating them |
+-| `CURRENT_STATE.md` | Local Pack/recast status can be read as ecosystem status | `superseded_for_new_production` outside local Pack scope | Retain as local history/status; add scope and authority links |
+-| `pack_b/operator/build_model_derived.py` | Frozen builder uses historical `125.13` and labels it historical | `superseded_for_new_production` | Preserve bytes/behavior for replay; do not turn it into the generic point interface |
+-| repository root | No canonical convention cache/lock pair exists | `migration_required` | Either consume point-level v3 provenance or add a byte-identical cache plus lock sidecar |
++| Convention ID | Value | Scope |
++|---|---:|---|
++| `mh_125p13_pdg_2026_historical_replay` | 125.13 | Completed adaptive M2 campaign and explicit replay fixtures |
++| `mh_125p13_high_mass_v1` | 125.13 | Historical high-mass and 150 GeV benchmark chain |
++| `mh_125p09_lambda1_boundary_legacy` | 125.09 | Legacy Boundary characterization/replay |
++| `mh_125p0_ufo_autoresearch_legacy` | 125.0 | Frozen upstream UFO and autoresearch replay paths |
+ 
+-## `fbientrigo/dihiggs_hep_cross`
++These values keep their original bytes, hashes, and labels. Boundary v0 and old UFO builder paths are not silently migrated to v3. The current MadGraph result registry remains empty until validation and explicit human promotion.
+ 
+-Audited `main`: `be331768ab644dc71fa4e8c46703a9fc3f567696`
++## Acceptance rule for future migrations
+ 
+-| File | Observation | Status under v3 | Required migration |
+-|---|---|---|---|
+-| `conventions/physics_conventions.yaml` | v2 contains `125.20` but presents itself as a source of truth, retains `H/35`, and falsely attributes `125.20` to the PDG 2026 listing | `incorrect_claim` and `migration_required` | Replace with byte-identical v3 cache carrying the adopted `125.13` convention and provenance sidecar |
+-| `docs/MH_CONVENTION.md` | Repeats the false `125.20` PDG attribution and three-copy authority model | `incorrect_claim` | Cite the adopted `125.13` PDG value and v3 single authority |
+-| `docs/CURRENT_DATA_AUTHORITY.md` | Correctly owns current-result promotion, but falsely says `dihiggs/main` already establishes `125.20` and blurs data authority with physics authority | `migration_required` | Keep result authority local; defer physics semantics to v3 and classify 125.20 results as replay-only |
+-| `state/CURRENT_CAMPAIGN.yaml` | Serializes a current campaign at `125.20` as a YAML number, cites the wrong authority chain, and registers only two of the three comparison prescriptions | `migration_required` | Classify it as frozen `mh_125p20_project_pre_v3` or regenerate as a new decimal-text 125.13 campaign with v3 provenance |
+-| `src/llp_recast/constants.py`, `scripts/run_mass_jet_control_campaign.py`, and three regression tests | Encode or assert active-looking `125.20` defaults/fixtures | `migration_required` | Update code and tests together; do not rewrite frozen MadGraph results |
+-| `scripts/run_physical_point_madgraph.py` | Correctly refuses a missing point mass; current coupling handoff uses the magnitude compatibility field | `aligned_non_authoritative` with pending sign gap | Preserve fail-closed mass behavior; signed physical vertex waits for issue #85 |
+-
+-### Exact `125.20` migration queue
+-
+-The following is the closed inventory of **exact convention-token** uses found
+-on the audited `main` branches. No entry authorizes a new calculation at
+-`125.20`; it identifies the work that must be completed before a downstream
+-consumer can claim v3 new-production compatibility. The same machine-readable
+-queue is `migration.pending_125p20_uses` in the canonical YAML.
+-
+-| Repository | Path | Classification | Required action |
+-|---|---|---|---|
+-| `dihiggs_ufo` | `docs/PHYSICAL_POINT_UFO_HANDOFF.md` | false PDG attribution | Replace with the adopted PDG 2026 `125.13` convention and v3 provenance |
+-| `dihiggs_ufo` | `pack_b/operator/build_model_derived.py` | historical-builder comment | Preserve its 125.13 artifact; remove the obsolete active-125.20 reference |
+-| `dihiggs_hep_cross` | `conventions/physics_conventions.yaml` | controlled cache | Replace with a byte-identical v3 cache and sidecar |
+-| `dihiggs_hep_cross` | `src/llp_recast/constants.py` | active code default | Change the pinned text and loader together |
+-| `dihiggs_hep_cross` | `scripts/run_mass_jet_control_campaign.py` | active campaign script | Parameterize or adopt 125.13 with explicit point provenance |
+-| `dihiggs_hep_cross` | `state/CURRENT_CAMPAIGN.yaml` | current campaign state | Freeze under `mh_125p20_project_pre_v3`, or regenerate a distinct 125.13 campaign |
+-| `dihiggs_hep_cross` | `docs/MH_CONVENTION.md` | false PDG attribution | Correct the external reference and authority chain |
+-| `dihiggs_hep_cross` | `docs/CURRENT_DATA_AUTHORITY.md` | mixed authority claim | Separate current-result authority from physics-convention authority |
+-| `dihiggs_hep_cross` | `tests/test_constants.py` | regression test | Update only with its constants migration |
+-| `dihiggs_hep_cross` | `tests/test_run_physical_point_madgraph.py` | regression test | Mark 125.20 fixtures historical or migrate new-production fixtures |
+-| `dihiggs_hep_cross` | `tests/test_madgraph_banner_verification.py` | regression test | Mark 125.20 fixtures historical or migrate new-production fixtures |
+-
+-`dihiggs_llp_recast/results/r8_h2_model_derived_4b/run_01/geometry.csv` is
+-explicitly excluded: values beginning `125.20` there are geometry numbers, not
+-the exact Higgs-mass convention token. The frozen result must not be edited.
+-
+-## `fbientrigo/dihiggs_llp_recast`
+-
+-Audited `main`: `72b8638671b788c35260491c06b3ab406775b5ae`
+-
+-| File | Observation | Status under v3 | Required migration |
+-|---|---|---|---|
+-| `README.md` | Correctly owns cutflow/acceptance/efficiency and rejects production-normalization inference; its 150 GeV benchmark uses historical upstream quantities | `aligned_non_authoritative` | Label incoming physics convention IDs and retain the benchmark as historical response evidence |
+-| repository root | No canonical convention cache/lock pair and no v3 point-provenance requirement were found | `migration_required` | Validate convention schema/commit/checksum on new sample manifests |
+-| `results/` and benchmark documentation | Frozen response artifacts must not become model-point or cross-section authority | `superseded_for_new_production` when reused outside their frozen sample | Preserve hashes; compose only with explicitly compatible upstream provenance |
+-
+-## `fbientrigo/dihiggs_boundary`
+-
+-Audited `main`: `32dd9df533cd4b4d613daaf516b6b25254bdaf25`
+-
+-| File | Observation | Status under v3 | Required migration |
+-|---|---|---|---|
+-| `conventions/physics_conventions.yaml` | v1 omits `m_h`, uses `H/35`, and presents a byte-identical copy as authority | `migration_required` | Replace with byte-identical v3 cache and provenance sidecar |
+-| `docs/model_contract.md` | Presents `125.09`, exact alignment, `lambda7=0`, and `mHp=mA` as the active model contract | `superseded_for_new_production` | Preserve as legacy contract or revise to require explicit campaign values |
+-| `docs/evaluate_point_contract.md` | Hard-codes `125.09` and exact alignment | `superseded_for_new_production` | Restrict to legacy replay; new composition consumes v3-bearing inputs |
+-| `docs/hbhs_contract.md`, `python/dhb/runner.py` | Use a `125.09` HiggsSignals reference | `migration_required` for new production; historical for exact regression | Separate the statistical reference mass from model-point `m_h` and record both explicitly |
+-| `docs/atlas_schema.md` | Freezes `125.09`, exact alignment, `mHp=mA`, and `lambda7=0` as Atlas-v0 values | `superseded_for_new_production` | Keep v0 replayable; v3-aware schemas must carry explicit campaign choices |
+-| `README.md` | Current composition role is substantially aligned and correctly requires direct per-point MadGraph results | `aligned_non_authoritative` | Add v3 provenance checks during the downstream migration |
+-
+-## Supersession rules
+-
+-1. This v3 contract supersedes semantic claims, not artifact bytes.
+-2. `125.20`, `125.13` (when under its historical ID), `125.09`, and `125.0`
+-   remain reproducible only under their named convention IDs.
+-3. A file timestamp, branch name, local copy, or later commit cannot supersede
+-   the authority automatically.
+-4. `dihiggs_hep_cross` may be authoritative for current MadGraph results while
+-   remaining non-authoritative for the model convention; authority is per
+-   stage, not per repository age.
+-5. An aligned downstream statement still requires canonical commit and
+-   checksum provenance before it can govern a new handoff.
+-6. Any conflict not listed here is rejected and added to this ledger before a
+-   migration proceeds.
+-
+-## Review boundary
+-
+-No appendix material or appendix branch was inspected or modified for this
+-ledger. No evaluator, scan, generated dataset, benchmark, MadGraph run, recast
+-run, or limit calculation was changed.
++Every downstream cache must hash to the exact canonical source bytes and have a sidecar naming the source repository, full commit, path, checksum, schema, and copy date. Point handoffs must include the v3 schema, source commit, and source SHA-256. Consumers reject missing, stale, or inconsistent provenance. New campaign assumptions such as alignment, `lambda7`, and mass degeneracy remain explicit inputs.
+diff --git a/docs/quickstart.md b/docs/quickstart.md
+index e31c852..f28e9e1 100644
+--- a/docs/quickstart.md
++++ b/docs/quickstart.md
+@@ -11,16 +11,22 @@ Do not silently reuse historical 125.13, 125.09, or 125.0 conventions.
+ 
+ ## Build
+ 
+-From the repository root:
++From the repository root, build only the library and two maintained evaluators
++first. This avoids the separate HiggsTools path required by legacy/HBHS
++executables and does not remove or clean existing build outputs.
+ 
+ ```bash
+-make -C 2hdmc -j2
+-make -C dihiggs clean
+-make -C dihiggs -j2
++make -C 2hdmc lib -j2
++make -C dihiggs app/Lambda1EvaluatorV2 app/DihiggsPointV2Evaluator -j2
+ ```
+ 
+ The canonical binaries are written under `dihiggs/app/`.
+ 
++The full `make -C dihiggs -j2` target builds all configured executables and
++may require the separately installed HiggsTools library. Use it only when
++those legacy/HBHS programs are needed; no clean target is required for the
++canonical evaluator workflow.
++
+ ## Lambda1 v2 through the orchestrator
+ 
+ ```bash
+diff --git a/mlpython/lib/README.md b/mlpython/lib/README.md
+index c53ff52..9a276f0 100644
+--- a/mlpython/lib/README.md
++++ b/mlpython/lib/README.md
+@@ -1,7 +1,13 @@
+-# Libreria de analisis y uso del Oracle
++# Librería de análisis y uso de Oracle (histórico)
++
++Este documento describe una interfaz heredada y no el flujo canónico actual.
++La ruta `dihiggs/` se refiere al subárbol fuente de este repositorio, no a un
++ejecutable Oracle garantizado. Para el flujo vigente consulta el [README del
++repositorio](../../README.md) y su [quickstart](../../docs/quickstart.md).
++
+ Oracle es llamado el programa generado con make dentro de `dihiggs/`, cabe destacar que una vez lo generes debes de modificar la ruta en `oracle.py` para asi llamarlo.
+ 
+ ## Modulos
+ - `explorer.py`:
+ - `oracle.py`:
+-- `utils.py`:
+\ No newline at end of file
++- `utils.py`:

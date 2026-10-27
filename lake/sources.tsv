@@ -1,0 +1,19 @@
+# dir (glob ok, relative to workspace)<TAB>authority<TAB>prune (yes|keep)<TAB>tables: NAME=GLOB ... (globs relative to dir)
+# First matching row owns a file. "keep" = upload but never delete locally (live work / code repos).
+dihiggs_boundary/data/runs/adaptive_m2_boundary_v1	historical	yes	boundary_points=raw_adaptive_points.csv boundary_leaves=mesh_leaves.csv boundary_seed_points=seed_profiled_points.csv
+dihiggs_boundary/data/runs/adaptive_m2_boundary_exploration_v1	historical	yes	boundary_points=raw_exploration_points.csv boundary_leaves=exploration_leaves.csv
+dihiggs_boundary/data/runs/profiled_m2_boundary_v1*	historical	yes	boundary_points=raw_profiled_points.csv
+dihiggs_boundary/data/runs	historical	yes	
+dihiggs_boundary/campaigns/survivor_*	candidate	yes	survivor_points=raw_fresh_12520_tanbeta_v2_points.parquet survivor_leaf_aggregate=aggregate/rectangular_leaf_aggregate.parquet
+dihiggs/campaigns/t2_t4_*	candidate	yes	calculator_agreement=calculator_scan_agreement.jsonl
+dihiggs/campaigns/lambda7_*	candidate	keep	
+dihiggs_hep_cross/campaigns/*	candidate	yes	
+dihiggs_hep_cross/results	candidate	yes	
+dihiggs_hep_cross/artifacts	candidate	yes	
+mission_runs/*	forbidden_as_current	yes	
+runs	forbidden_as_current	yes	harness_decisions=jev_harness/decision_events.jsonl
+experiments/*	forbidden_as_current	keep	
+dihiggs_llp_recast	candidate	keep	
+dihiggs_ufo	candidate	keep	
+recast_viewer	candidate	keep	
+/home/fabian/atlas_dihiggs_archive/20260831_pre_madgraph_reset	historical	keep	
