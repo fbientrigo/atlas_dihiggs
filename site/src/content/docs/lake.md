@@ -76,7 +76,7 @@ Each leaf the run creates starts from the recorded `n_points` and `n_valid` of t
 
 ## Compact tables
 
-`NAME=GLOB@compact` in `sources.tsv` stores theory-invalid rows (`theory_ok_v1 != 1`) of that table with their output columns as float32. Inputs stay exact, so the table still says which points were already run: tan β, masses, λ6/X, Δ, λ7, mh, seeds, ids and mesh bounds. Valid rows are unchanged, and the blob keeps everything at full precision. This applies to new commits only. On the measured `boundary_points` (1.23M rows, 3.4% valid) it halves the table, 163 MB to 87 MB.
+`NAME=GLOB@compact` in `sources.tsv` keeps, for theory-invalid rows (`theory_ok_v1 != 1`) of that table, only the columns that say which point was already run, unchanged: tan β, masses, λ6/X, Δ, λ7, mh, seeds, ids, mesh bounds, plus the rejection reason (`rejection_stage`, `rejection_reason`). Their outputs (widths, BRs, couplings) are not in the table; `lake restore` gets the full rows from the blob, which is lossless. Valid rows are unchanged. `explored` and `--export` give the same answer as on a full table. This applies to new commits only. On the measured `boundary_points` (1.23M rows, 3.4% valid) the table goes from 163 MB to 23 MB.
 
 ## Adding data
 

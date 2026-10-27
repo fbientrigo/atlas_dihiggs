@@ -85,7 +85,7 @@ The measured result today: all 1,327,904 boundary rows are lambda7 = 0. The run 
 | 4 | `cmd_commit` wrote `commits/<cid>.json` before verifying. A failed or partial upload left a record, so `sync` treated the files as covered and never re-uploaded them. Prune still refused, but the data was never safely in the remote. | verify, then write the record |
 | 5 | `cmd_sync` checked only rows at or above the commit root, so a `keep` row nested under a prunable root was ignored. | nested rows count too |
 
-`lake.py` went from 392 lines before this change to 486 after: +94 lines, of which the explored, regimes and CLI code is about 70. Task H (export, compact, keep globs) brought it to 523.
+`lake.py` went from 392 lines before this change to 486 after: +94 lines, of which the explored, regimes and CLI code is about 70. Task H (export, compact, keep globs) brought it to 523; option (b) made it 524.
 
 ## lambda7 status of the hep_cross groups pruned on 2026-10-13 (measured, nothing restored)
 
@@ -107,19 +107,22 @@ These groups have no lake tables, so `lake query` cannot see their parameters. T
 
 Rule: anything that feeds a physics claim stays lossless in the blob. Every committed file is in `blobs/` byte-for-byte and sha256-checked on restore. Tables are an index and can be rebuilt from blobs.
 
-Implemented (P3, option 1, opt-in per table, new commits only): `NAME=GLOB@compact` in `sources.tsv`. `compact()` splits the table into two parts:
-- `part-0` holds the valid rows (`theory_ok_v1 = 1`), unchanged;
-- `part-1` holds every other row, with the DOUBLE columns in the `COMPACT_OUTPUTS` allowlist cast to FLOAT. The allowlist is `*_reconstructed*`, `two_hdmc_*`, `g_*`, `width_*`, `total_width_GeV`, `br_*`, `ctau_mm`.
+Implemented (P3, option (b), chosen by the user 2026-10-27; opt-in per table, new commits only): `NAME=GLOB@compact` in `sources.tsv`. `compact()` splits the table into two parts:
+- `part-0` holds the valid rows (`theory_ok_v1 = 1`), unchanged. It is written even when empty, so the output columns stay in the table schema (`explored` needs `g_physical_hphiphi_GeV`).
+- `part-1` holds every other row, but only the columns in the `COMPACT_KEEP` allowlist, unchanged: `campaign_id`, `run_id`, `point_id`, `yukawa_type`, `*_input*` (tan β, masses, sin(β−α), M², m12², λ6, λ7, mh), `m_phi_GeV`, `M_plot_GeV`, `X_lambda6_times_tan_beta`, `lambda6_from_X`, `Delta_heavy_GeV`, `profile_index`/`profile_replicate`/`profile_seed`, `outer_cell_id`/`outer_*_index`, `mesh_*`, the `*_min_GeV`/`*_max_GeV` bounds, `theory_ok_v1`, and the rejection code `rejection_stage`/`rejection_reason`.
 
-Columns outside the allowlist are never quantized. That covers every input: `tan_beta_input` (up to 1e7), the masses, `lambda6_input`/`X_lambda6_times_tan_beta`/`lambda6_from_X`, `Delta_heavy_GeV`, `lambda7_input`, `mh_input_GeV`, `profile_seed`, `point_id`, `mesh_leaf_id` and the mesh bounds. A stored invalid point is the record that it was already run, so these must stay exact. A reader with `union_by_name` sees DOUBLE again. `test_lake.py` checks that:
+A stored invalid point is the record that it was already run, so these columns stay exact; nothing is quantized. The rejection code is the existing `rejection_reason` string (`check_positivity_false`, `check_unitarity_false`, `check_perturbativity_false`), which Parquet stores dictionary-encoded, so it costs about nothing. Every other column of an invalid row (reconstructed couplings, widths, BRs, ctau, check flags) is dropped from the table and stays in the blob: `SELECT width_* … WHERE theory_ok_v1 = 0` returns NULL on compact commits, and `lake restore` gives the full rows. `test_lake.py` checks that:
 - valid rows are bit-identical;
-- the inputs of invalid rows are bit-identical (tan β = 1e7 + 0.617…);
-- invalid outputs equal float32(x);
-- an input-key join between a plain commit and a compact commit matches every row.
+- the kept columns of invalid rows are bit-identical (tan β = 1e7 + 0.617…), the rest are NULL, the reason code is present;
+- an input-key join between a plain commit and a compact commit matches every row;
+- `explored` gives the same rows for a plain and a compact commit, and `--export` is unchanged;
+- a table with no valid row still writes the (empty) valid part.
 
-Enabled for `boundary_points` and `survivor_points`. Remote tables already written are not rewritten.
+Enabled for `boundary_points` and `survivor_points`. Option (a), float32 outputs, is removed: one mode is simpler than two. Remote tables already written are not rewritten; any commit tagged `"compact": "invalid_outputs_float32"` stays readable as it is.
 
-The quantized set includes `tan_beta_reconstructed`, which is a round-trip diagnostic, not the input. At 1e7, float32 keeps about one unit. Inputs are untouched.
+Measured with `compact()` on the concatenated mirror tables (read-only), and checked with `EXCEPT ALL` against the source: 0 differing rows in the valid part and in the kept columns of the invalid part.
+- `boundary_points`: 163.4 MB → **22.8 MB** (5.6 valid + 17.2 invalid), −86%.
+- `survivor_points`: 19.6 MB → **8.7 MB** (4.0 + 4.8), −56%.
 
 ### Measured on the local mirror (read-only; outputs in `/tmp/lake_p3`)
 
@@ -128,15 +131,15 @@ Each table was concatenated into one zstd Parquet file, and each option was appl
 | Option | `boundary_points` (1,225,856 rows, 3.4% valid) | `survivor_points` (102,048 rows, 21.2% valid) | Lossy in the table? |
 |---|---|---|---|
 | today (float64, all rows) | 163.4 MB | 19.6 MB | — |
-| (a) float32 invalid outputs (**implemented**) | 87.0 MB (5.6 valid + 81.3 invalid), −47% | 14.1 MB, −28% | invalid outputs at 1e-7 relative |
-| (b) invalid rows keep only inputs + `rejection_stage`/`rejection_reason` | 23.1 MB, −86% | 9.4 MB, −52% | invalid outputs gone from the table, still in the blob |
+| (a) float32 invalid outputs (removed) | 87.0 MB (5.6 valid + 81.3 invalid), −47% | 14.1 MB, −28% | invalid outputs at 1e-7 relative |
+| (b) invalid rows keep only inputs + `rejection_stage`/`rejection_reason` (**implemented**; predecessor's denylist variant) | 23.1 MB, −86% | 9.4 MB, −52% | invalid outputs gone from the table, still in the blob |
 | (c) invalid rows → per (leaf, `profile_seed`) list of `profile_index` | 6.2 MB, −96% | 4.0 MB, −80% | inputs must be regenerated |
 | (d) lossless: sort by leaf, zstd level 3 / 9 / 19 | 163.4 / 163.1 / 154.9 MB | 19.6 / 19.5 / 18.5 MB | no |
 | (a)+(d) zstd 19 | 81.4 MB | 13.6 MB | as (a) |
 
 On (c), proposals are deterministic. `_contexts()` was re-run with the restored `campaign.yaml` and `campaign_state.json` of `8292bb`, and it regenerated 100,000 of 100,000 survivor rows bit-exactly: `X`, `Delta`, `lambda6_from_X` and `profile_seed`. Regenerating still needs the exact config, the leaf geometry and the same `_lhs`/`_contexts` code. A code change would silently change what "already run" means.
 
-**Recommendation.** For the stated purpose, knowing exactly what ran so it is never re-run, (b) is the better compression. It keeps every input exact and keeps the rejection reason, and it is 3.8× smaller than (a) on `boundary_points`. Each invalid point's outputs stay one `restore` away in the blob. (c) is smaller still, but it ties the meaning of the table to a code version, so it is not recommended. (d) alone is not worth it, at ≤5%. Only (a) is implemented. (b) would be a one-line variant of `compact()` (an `@inputs` mode) and needs the user's decision, because `SELECT width_* FROM … WHERE theory_ok_v1 = 0` would then return nothing.
+**Recommendation.** For the stated purpose, knowing exactly what ran so it is never re-run, (b) is the better compression. It keeps every input exact and keeps the rejection reason, and it is 3.8× smaller than (a) on `boundary_points`. Each invalid point's outputs stay one `restore` away in the blob. (c) is smaller still, but it ties the meaning of the table to a code version, so it is not recommended. (d) alone is not worth it, at ≤5%. The user chose (b); it is now what `@compact` means.
 
 ## Gaps between the target and today's code
 
@@ -205,6 +208,6 @@ Nothing was copied into the module.
 
 - **P1.** Done for the survivor v2 campaign. See above.
 - **P2.** Add tables for the lambda7 ≠ 0 campaigns (`dihiggs/campaigns/lambda7_*`, currently `keep` with no tables). They have no mesh columns, so they would appear in `commits` but not in `explored`. A lambda7 ≠ 0 boundary run (a config with `lambda7` ≠ 0, or lambda7 as a scan axis) is what would populate `explored`.
-- **P3.** Option 1 (a) is implemented as `@compact`. Open decision: (b), an `@inputs` mode, is recommended for the never-re-run purpose (see Precision policy).
+- **P3.** Done: `@compact` is option (b), invalid rows keep inputs, ids and rejection reason (see Precision policy). Option (a) was removed.
 - **P4.** Retire superseded lambda7 = 0 data by authority label (`historical`), not by deletion. The blobs are the only copy of the 30 newer hep_cross files (forensics §1).
 - **P5.** Done: `site/src/content/docs/lake.md` covers the safety rules, regimes, explored, compact tables and the `--explored` loop.

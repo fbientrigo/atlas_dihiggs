@@ -1,7 +1,7 @@
 # dir (glob ok, relative to workspace)<TAB>authority<TAB>prune (yes|keep, then -GLOB ...)<TAB>tables: NAME=GLOB[@compact] ... (globs relative to dir)
 # First matching row owns a file. "keep" = upload but never delete locally (live work / code repos).
 # "yes -GLOB": prunable, but files whose basename matches GLOB are never pruned (run state and configs a later run resumes from).
-# "@compact": theory-invalid rows of that table store output columns as float32 (inputs exact; blob stays lossless). New commits only.
+# "@compact": theory-invalid rows of that table keep only inputs, ids and rejection reason (exact; blob stays lossless). New commits only.
 dihiggs_boundary/data/runs/adaptive_m2_boundary_v1	historical	yes -*_state.json -*.yaml	boundary_points=raw_adaptive_points.csv@compact boundary_leaves=mesh_leaves.csv boundary_seed_points=seed_profiled_points.csv
 dihiggs_boundary/data/runs/adaptive_m2_boundary_exploration_v1	historical	yes -*_state.json -*.yaml	boundary_points=raw_exploration_points.csv@compact boundary_leaves=exploration_leaves.csv
 dihiggs_boundary/data/runs/profiled_m2_boundary_v1*	historical	yes -*_state.json -*.yaml	boundary_points=raw_profiled_points.csv@compact

@@ -40,6 +40,6 @@ Queries use only commits and tables, about 180 MB, and never download blobs. The
 
 ## Adding data
 - A new campaign dir that matches a pattern in `sources.tsv` is picked up by `sync`. Otherwise, add one line.
-- To make files queryable, add `NAME=GLOB` in column 4. `NAME=GLOB@compact` stores the output columns of theory-invalid rows as float32. Inputs and valid rows stay exact, and the blob is unchanged. A table with the point columns (`lake.POINT_COLUMNS`: dihiggs.point.v2 plus boundary `mesh_*` bounds) feeds `explored` automatically.
+- To make files queryable, add `NAME=GLOB` in column 4. `NAME=GLOB@compact` keeps only the inputs, ids and rejection reason of theory-invalid rows (`lake.COMPACT_KEEP`), exact; valid rows are unchanged, and the blob keeps the full rows. A table with the point columns (`lake.POINT_COLUMNS`: dihiggs.point.v2 plus boundary `mesh_*` bounds) feeds `explored` automatically.
 
 Run the tests with `python lake/test_lake.py`. They need no Drive access.

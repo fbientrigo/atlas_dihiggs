@@ -165,24 +165,25 @@ def to_parquet(root, glob, out, only=None):
     return con.execute(f"SELECT count(*) FROM read_parquet('{out}')").fetchone()[0]
 
 
-# Output columns that a compact table stores as float32 for theory-invalid rows. Everything else (all inputs:
-# tan_beta, masses, lambda6/X, Delta, lambda7, mh, seeds, ids, mesh bounds) stays exact, because a stored invalid
-# point is the record that it was already run. Allowlist on purpose: an unknown column is never quantized.
-COMPACT_OUTPUTS = ("*_reconstructed*", "two_hdmc_*", "g_*", "width_*", "total_width_GeV", "br_*", "ctau_mm")
+# Columns a compact table keeps for theory-invalid rows: the exact inputs and ids that say "this point was already run"
+# (tan_beta, masses, lambda6/X, Delta, lambda7, mh, seeds, point/leaf ids, mesh bounds) and why it was rejected.
+# Allowlist on purpose: every other column (outputs, diagnostics) of an invalid row lives only in the lossless blob.
+COMPACT_KEEP = ("campaign_id", "run_id", "point_id", "yukawa_type", "*_input*", "m_phi_GeV", "M_plot_GeV", "X_lambda6_times_tan_beta",
+                "lambda6_from_X", "Delta_heavy_GeV", "profile_index", "profile_replicate", "profile_seed", "outer_cell_id",
+                "outer_*_index", "mesh_*", "*_min_GeV", "*_max_GeV", "theory_ok_v1", "rejection_stage", "rejection_reason")
 
 
 def compact(src, valid, invalid):
-    """Split a point table: valid rows (theory_ok_v1 = 1) unchanged; invalid rows with DOUBLE outputs as FLOAT.
-    Readers that union both parts (union_by_name) see DOUBLE again. Returns [(path, rows)] for non-empty parts."""
+    """Split a point table: valid rows (theory_ok_v1 = 1) unchanged; invalid rows keep only the COMPACT_KEEP columns, unchanged.
+    The valid part is written even when empty so its schema (the output columns) stays in the table. Returns [(path, rows)]."""
     con, src = duckdb.connect(), "read_parquet('" + str(src).replace("'", "''") + "')"
-    cols = con.execute(f"DESCRIBE SELECT * FROM {src}").fetchall()
-    out = ", ".join(f'"{c}"::FLOAT AS "{c}"' if t == "DOUBLE" and any(fnmatch.fnmatchcase(c, g) for g in COMPACT_OUTPUTS) else f'"{c}"'
-                    for c, t, *_ in cols)
+    keep = ", ".join(f'"{c}"' for c, *_ in con.execute(f"DESCRIBE SELECT * FROM {src}").fetchall()
+                     if any(fnmatch.fnmatchcase(c, g) for g in COMPACT_KEEP))
     bad, parts = "coalesce(TRY_CAST(theory_ok_v1 AS DOUBLE), 0) != 1", []
-    for dst, q in ((valid, f"SELECT * FROM {src} WHERE NOT ({bad})"), (invalid, f"SELECT {out} FROM {src} WHERE {bad}")):
+    for dst, q in ((valid, f"SELECT * FROM {src} WHERE NOT ({bad})"), (invalid, f"SELECT {keep} FROM {src} WHERE {bad}")):
         con.execute(f"COPY ({q}) TO '{dst}' (FORMAT parquet, COMPRESSION zstd)")
         n = con.execute(f"SELECT count(*) FROM read_parquet('{dst}')").fetchone()[0]
-        if n:
+        if n or dst == valid:
             parts.append((dst, n))
     return parts
 
@@ -219,7 +220,7 @@ def cmd_commit(a):
                 rel = f"tables/{name}/commit={cid}/part-{i}.parquet"
                 rem.put(part, rel)
                 rec["tables"].append({"name": name, "glob": glob, "rows": n, "path": rel, "md5": _hash(part, "md5"),
-                                      **({"compact": "invalid_outputs_float32"} if part.name.endswith(".invalid.parquet") else {})})
+                                      **({"compact": "invalid_inputs_only"} if part.name.endswith(".invalid.parquet") else {})})
         verify(rem, cid, rec)  # before the record: a commit record must never point at a missing/partial object
         cj = Path(tmp, "c.json"); cj.write_text(json.dumps(rec, indent=1))
         rem.put(cj, f"commits/{cid}.json")
