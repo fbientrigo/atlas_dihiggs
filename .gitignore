@@ -9,10 +9,8 @@
 !/README.md
 !/requirements.txt
 !/docs/
-/docs/*
-!/docs/ONBOARDING.md
-!/docs/WORKSPACE_MAP.md
-!/docs/audits/
+!/mkdocs.yml
+!/.github/
 /docs/audits/*
 !/docs/audits/ARCHITECTURE_SIMPLIFICATION_REPORT.md
 !/lake/

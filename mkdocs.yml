@@ -1,0 +1,55 @@
+site_name: ATLAS DiHiggs & LLP Recast
+site_description: Documentation for the 2HDM Type-I DiHiggs and Long-Lived Particle Recast Workspace
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+  - attr_list
+  - md_in_html
+
+validation:
+  links:
+    not_found: ignore
+
+exclude_docs: |
+  audits/*
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Modules: modules.md
+  - Physics Authority & Provenance: authority.md
+  - Data Lake: lake.md

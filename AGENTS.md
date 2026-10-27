@@ -1,21 +1,8 @@
-# Workspace guidance
+# Agent Guidance
 
-Read `README.md` and `docs/ONBOARDING.md` before working across repositories.
-This root repository owns the workspace pins, overlays, bootstrap, and
-lightweight checks; the six nested repositories own their code and contracts.
+Consult [README.md](README.md) for workspace architecture, submodules, and physics authority rules.
 
-Before using a physics number, consult both
-`dihiggs_hep_cross/docs/CURRENT_DATA_AUTHORITY.md` and
-`dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml`. Consult the theory convention
-authority in `dihiggs/docs/PROJECT_PHYSICS_AUTHORITY.md` and
-`dihiggs/conventions/physics_conventions.yaml` before interpreting points.
-Never infer current authority from timestamps or local presence.
-
-A MadGraph cross section needs its H2 mass, `GHphiphi`, coupling prescription,
-process, collision energy, UFO identity, seed, and banner/source artifact.
-The current-results registry is separate from the theory-convention authority;
-do not promote results as part of environment setup.
-
-Do not let bootstrap overwrite an existing nested checkout. Keep overlays
-limited to deliberate workspace changes; preserve pre-existing local changes.
-Do not download or synchronize remote data as part of setup.
+- **Submodule boundaries**: Nested repositories own their code, tests, and contracts; keep edits scoped.
+- **Physics authority**: Never promote results, alter campaign state, or infer authority from file timestamps or presence.
+- **Cross sections**: MadGraph cross sections require full provenance (H2 mass, `GHphiphi`, prescription, process, energy, UFO ID, seed, banner).
+- **Environment**: Do not download remote data or modify nested checkouts during setup.
