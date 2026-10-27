@@ -1,7 +1,0 @@
-# directory<TAB>clone URL<TAB>target commit<TAB>overlay<TAB>overlay SHA-256<TAB>optional Git bundle<TAB>bundle SHA-256 or '-'
-dihiggs	https://github.com/fbientrigo/dihiggs.git	087ba246e9a9fa34b16249b52629a62703893b5c	patches/dihiggs.patch	60320078000b1ad3c235927988ecb887a3f80a481a76affc8b40ff5fce9ecb8c	patches/dihiggs-base.bundle	b0e38e0856d0aace3a4bf83c1dc93fbc2e1fff5a146566cbaaac36d2a09a2636
-dihiggs_boundary	https://github.com/fbientrigo/dihiggs_boundary.git	32dd9df533cd4b4d613daaf516b6b25254bdaf25	patches/dihiggs_boundary.patch	0bffa03f196682b47c80dfab417a5f3dca84e187aaf75b5b1308ea22fe0d859f	-	-
-dihiggs_hep_cross	https://github.com/fbientrigo/dihiggs_hep_cross.git	f8893bea1627b2091f4d3e782ed3a2d575066365	patches/dihiggs_hep_cross.patch	a3eebedd5be2d69588ae32fa7beb34e237fac253ac15c14e7a4b05b73d633384	-	-
-dihiggs_llp_recast	https://github.com/fbientrigo/dihiggs_llp_recast.git	72b8638671b788c35260491c06b3ab406775b5ae	patches/dihiggs_llp_recast.patch	f3d6f2bc30ae6c34ce4c3954ced1a640997f5353533f3f6cc20585d821fb1eda	-	-
-dihiggs_ufo	https://github.com/fbientrigo/dihiggs_ufo.git	7dd02c14e2314f9d172a0782d7860826a52600d6	patches/dihiggs_ufo.patch	cb03df8c7d97355fb43bf5ea1ce90f69e6e6d08835a742f92d6e506b238f9025	-	-
-recast_viewer	https://github.com/fbientrigo/atlas_recast_viewer.git	19c18ee336c0299deec5e2bd381fa02f68a1d836	patches/recast_viewer.patch	d58d51b9ef7dc116f423fb2d8b325b26bdda94c4f9041cd4dbe3a1884d6c999a	-	-
