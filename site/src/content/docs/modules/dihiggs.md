@@ -5,10 +5,10 @@ description: "Canonical 2HDM Type-I parameter evaluation, decay widths, branchin
 
 <div class="wired-card">
   <div class="wired-card-header">
-    <span>// MODULE_SPEC: dihiggs</span>
+    <span>// module · dihiggs</span>
     <span class="wired-pill red">THEORY CONVENTION AUTHORITY</span>
   </div>
-  <div class="wired-grid" style="margin: 0; font-size: 0.82rem;">
+  <div class="wired-grid">
     <div><strong>REPOSITORY:</strong> <a href="https://github.com/fbientrigo/dihiggs">fbientrigo/dihiggs</a></div>
     <div><strong>PINNED COMMIT:</strong> <code>47fcfe8</code></div>
     <div><strong>PRIMARY ROLE:</strong> Theory Evaluation & Scans</div>
@@ -46,7 +46,4 @@ The `dihiggs` repository serves as the single source of truth for all theory def
 
 ## API Reference
 
-- [2HDMC Base Library C++ API Reference](/api/cpp/base/2hdmc/)
-- [HiggsTools Base Library C++ API Reference](/api/cpp/base/higgstools/)
-- [dihiggs Evaluators C++ API Reference](/api/cpp/project/dihiggs/)
-- [dihiggs Python Tools Reference](/api/python/dihiggs/)
+Symbols for this module are listed per source file in the [API reference](/api/); the coverage table links to each group.

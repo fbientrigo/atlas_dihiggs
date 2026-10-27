@@ -5,10 +5,10 @@ description: "Universal FeynRules Output models, MadGraph interfaces, and Pythia
 
 <div class="wired-card">
   <div class="wired-card-header">
-    <span>// MODULE_SPEC: dihiggs_ufo</span>
+    <span>// module · dihiggs_ufo</span>
     <span class="wired-pill">MODEL RELEASE BASELINE</span>
   </div>
-  <div class="wired-grid" style="margin: 0; font-size: 0.82rem;">
+  <div class="wired-grid">
     <div><strong>REPOSITORY:</strong> <a href="https://github.com/fbientrigo/dihiggs_ufo">fbientrigo/dihiggs_ufo</a></div>
     <div><strong>PINNED COMMIT:</strong> <code>9a7ba38</code></div>
     <div><strong>PRIMARY ROLE:</strong> UFO & Pythia Models</div>
@@ -38,4 +38,4 @@ The `dihiggs_ufo` repository provides Universal FeynRules Output (UFO) models, M
 
 ## API Reference
 
-- [dihiggs_ufo Python Validation Reference](/api/python/dihiggs-ufo/)
+Symbols for this module are listed per source file in the [API reference](/api/); the coverage table links to each group.

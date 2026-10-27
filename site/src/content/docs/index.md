@@ -1,79 +1,56 @@
 ---
 title: "ATLAS DiHiggs & LLP Recast"
-description: "Research workspace investigating long-lived scalars in the 2HDM Type-I framework and reinterpreting ATLAS displaced-vertex plus jets searches."
+description: "Research workspace for long-lived scalars in the 2HDM Type-I and the reinterpretation of ATLAS displaced-vertex plus jets searches."
 template: splash
-hero:
-  tagline: "Modular phenomenological research workspace investigating long-lived scalars in the 2HDM Type-I framework and reinterpreting ATLAS displaced-vertex plus jets searches."
-  actions:
-    - text: "Pipeline"
-      link: /pipeline/
-      variant: primary
-    - text: "API Reference"
-      link: /api/
-      variant: secondary
 ---
 
-<div class="wired-card">
-  <div class="wired-card-header">
-    <span>// QUICK START: REPOSITORY INITIALIZATION</span>
-    <span class="wired-pill">WORKSPACE PROTOCOL</span>
+<div class="home-hero">
+  <p class="wired-eyebrow"><b>[00]</b> // workspace</p>
+  <h1>ATLAS DiHiggs<br>&amp; LLP Recast</h1>
+  <p class="lead">Long-lived scalars in the 2HDM Type-I, and the reinterpretation of ATLAS displaced-vertex plus jets searches. Six modules, one pinned workspace.</p>
+  <div class="actions not-content">
+    <a class="primary" href="/getting-started/">Get started</a>
+    <a href="/pipeline/">Pipeline</a>
+    <a href="/api/">API reference</a>
   </div>
+</div>
+
+<div class="wired-card">
+  <div class="wired-card-header"><span>// quick start</span><span class="wired-pill">clone</span></div>
 
 ```sh
-# 1. Clone complete workspace with all submodules
+# all six modules
 git clone --recursive https://github.com/fbientrigo/atlas_dihiggs.git
 
-# 2. Or clone root workspace and initialize a single submodule
-git clone https://github.com/fbientrigo/atlas_dihiggs.git && git submodule update --init <module>
+# or one module only
+git clone https://github.com/fbientrigo/atlas_dihiggs.git
+cd atlas_dihiggs && git submodule update --init dihiggs
 
-# 3. Verify workspace integrity and submodule pins
+# offline integrity check
 python3 scripts/check_workspace.py
 ```
 
 </div>
 
 <div class="wired-grid">
-  <div class="wired-card" style="margin-bottom: 0;">
-    <div class="wired-card-header">
-      <span>// PIPELINE</span>
-      <span class="wired-pill">WORKFLOW</span>
-    </div>
-    <p style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--sl-color-gray-1);">
-      Six-stage scientific pipeline connecting 2HDM Lagrangian evaluation, UFO models, MadGraph cross sections, detector acceptance, and limit boundaries.
-    </p>
-    <a href="/pipeline/">Explore Pipeline Architecture &rarr;</a>
+  <div class="wired-card">
+    <div class="wired-card-header"><span>// pipeline</span><span class="wired-pill">6 stages</span></div>
+    <p>From 2HDM theory evaluation through UFO models, MadGraph cross sections and detector recast to the exclusion boundary.</p>
+    <a href="/pipeline/">Read the pipeline →</a>
   </div>
-
-  <div class="wired-card" style="margin-bottom: 0;">
-    <div class="wired-card-header">
-      <span>// MODULES</span>
-      <span class="wired-pill">6 SUBMODULES</span>
-    </div>
-    <p style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--sl-color-gray-1);">
-      Architectural specifications and boundary contracts for theory evaluators, cross-section engines, recast drivers, and 3D visualizers.
-    </p>
-    <a href="/modules/">Inspect Submodules &rarr;</a>
+  <div class="wired-card">
+    <div class="wired-card-header"><span>// modules</span><span class="wired-pill">6 submodules</span></div>
+    <p>What each repository owns, its inputs and outputs, and the contract it keeps with its neighbours.</p>
+    <a href="/modules/">Browse modules →</a>
   </div>
-
-  <div class="wired-card" style="margin-bottom: 0;">
-    <div class="wired-card-header">
-      <span>// API REFERENCE</span>
-      <span class="wired-pill">C++ &amp; PYTHON</span>
-    </div>
-    <p style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--sl-color-gray-1);">
-      Per-file C++ Doxygen AST and per-module Python Griffe references linked directly to pinned GitHub submodule commits.
-    </p>
-    <a href="/api/">Browse API &amp; Coverage &rarr;</a>
+  <div class="wired-card">
+    <div class="wired-card-header"><span>// API reference</span><span class="wired-pill">C++ · Python</span></div>
+    <p>Per-file symbols from Doxygen and griffe, each linked to its line at the pinned commit.</p>
+    <a href="/api/">Open the API index →</a>
   </div>
-
-  <div class="wired-card" style="margin-bottom: 0;">
-    <div class="wired-card-header">
-      <span>// AUTHORITY</span>
-      <span class="wired-pill">PROVENANCE</span>
-    </div>
-    <p style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--sl-color-gray-1);">
-      Physics authority contracts, zero-timestamp inference rules, campaign state tracking, and numerical result verification.
-    </p>
-    <a href="/authority/">Review Governance Rules &rarr;</a>
+  <div class="wired-card">
+    <div class="wired-card-header"><span>// authority</span><span class="wired-pill">provenance</span></div>
+    <p>Which physics conventions and campaign state are authoritative, and how provenance is checked.</p>
+    <a href="/authority/">Read the rules →</a>
   </div>
 </div>

@@ -5,10 +5,10 @@ description: "Source-neutral interactive event display and cutflow explorer."
 
 <div class="wired-card">
   <div class="wired-card-header">
-    <span>// MODULE_SPEC: recast_viewer</span>
+    <span>// module · recast_viewer</span>
     <span class="wired-pill">DIAGNOSTIC EVENT DISPLAY</span>
   </div>
-  <div class="wired-grid" style="margin: 0; font-size: 0.82rem;">
+  <div class="wired-grid">
     <div><strong>REPOSITORY:</strong> <a href="https://github.com/fbientrigo/atlas_recast_viewer">fbientrigo/atlas_recast_viewer</a></div>
     <div><strong>PINNED COMMIT:</strong> <code>b049d37</code></div>
     <div><strong>PRIMARY ROLE:</strong> Interactive Event Visualization</div>
@@ -38,4 +38,4 @@ The `recast_viewer` application provides a source-neutral, static interactive vi
 
 ## API Reference
 
-- [recast_viewer Python Preprocessing Reference](/api/python/recast-viewer/)
+Symbols for this module are listed per source file in the [API reference](/api/); the coverage table links to each group.

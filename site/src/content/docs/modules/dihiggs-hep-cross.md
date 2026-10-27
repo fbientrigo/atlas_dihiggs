@@ -5,10 +5,10 @@ description: "MadGraph production drivers, cross-section ingestion, campaign sta
 
 <div class="wired-card">
   <div class="wired-card-header">
-    <span>// MODULE_SPEC: dihiggs_hep_cross</span>
+    <span>// module · dihiggs_hep_cross</span>
     <span class="wired-pill red">NUMERICAL RESULT AUTHORITY</span>
   </div>
-  <div class="wired-grid" style="margin: 0; font-size: 0.82rem;">
+  <div class="wired-grid">
     <div><strong>REPOSITORY:</strong> <a href="https://github.com/fbientrigo/dihiggs_hep_cross">fbientrigo/dihiggs_hep_cross</a></div>
     <div><strong>PINNED COMMIT:</strong> <code>df95b4b</code></div>
     <div><strong>PRIMARY ROLE:</strong> MadGraph Drivers & Campaign State</div>
@@ -45,5 +45,4 @@ The `dihiggs_hep_cross` module executes hard-scattering event generation, cross-
 
 ## API Reference
 
-- [dihiggs_hep_cross C++ Adapters Reference](/api/cpp/project/hep_cross/)
-- [dihiggs_hep_cross Python Reference (`llp_recast`)](/api/python/dihiggs-hep-cross/)
+Symbols for this module are listed per source file in the [API reference](/api/); the coverage table links to each group.

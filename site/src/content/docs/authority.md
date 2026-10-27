@@ -5,10 +5,10 @@ description: "Strict contracts governing theory conventions, data authority, and
 
 <div class="wired-card">
   <div class="wired-card-header">
-    <span>// GOVERNANCE_PROTOCOL: SCIENTIFIC AUTHORITY & REPRODUCIBILITY</span>
+    <span>// governance</span>
     <span class="wired-pill red">ZERO TIMESTAMP AUTHORITY</span>
   </div>
-  <p style="margin-bottom: 0;">
+  <p>
     To guarantee scientific reproducibility across a multi-repository workspace, physics numbers, model conventions, and calculation outputs are strictly governed by explicit authority contracts.
   </p>
 </div>
@@ -18,29 +18,29 @@ description: "Strict contracts governing theory conventions, data authority, and
 There is an absolute separation between **theory conventions** and **numerical results**:
 
 <div class="wired-grid">
-  <div class="wired-card" style="margin-bottom: 0;">
+  <div class="wired-card">
     <div class="wired-card-header">
       <span>THEORY CONVENTION AUTHORITY</span>
       <span class="wired-pill">MODULE: dihiggs</span>
     </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0.5rem;">
+    <p>
       Canonical 2HDM definitions, Standard Model Higgs mass, Lagrangian couplings, and formula conventions.
     </p>
-    <ul style="font-size: 0.8rem; margin: 0; padding-left: 1.2rem;">
+    <ul>
       <li><a href="https://github.com/fbientrigo/dihiggs/blob/main/docs/PROJECT_PHYSICS_AUTHORITY.md"><code>dihiggs/docs/PROJECT_PHYSICS_AUTHORITY.md</code></a></li>
       <li><a href="https://github.com/fbientrigo/dihiggs/blob/main/conventions/physics_conventions.yaml"><code>dihiggs/conventions/physics_conventions.yaml</code></a></li>
     </ul>
   </div>
 
-  <div class="wired-card" style="margin-bottom: 0;">
+  <div class="wired-card">
     <div class="wired-card-header">
       <span>NUMERICAL RESULT AUTHORITY</span>
       <span class="wired-pill">MODULE: dihiggs_hep_cross</span>
     </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0.5rem;">
+    <p>
       Authoritative production cross sections, simulation datasets, campaign registries, and banner validations.
     </p>
-    <ul style="font-size: 0.8rem; margin: 0; padding-left: 1.2rem;">
+    <ul>
       <li><a href="https://github.com/fbientrigo/dihiggs_hep_cross/blob/main/docs/CURRENT_DATA_AUTHORITY.md"><code>dihiggs_hep_cross/docs/CURRENT_DATA_AUTHORITY.md</code></a></li>
       <li><a href="https://github.com/fbientrigo/dihiggs_hep_cross/blob/main/state/CURRENT_CAMPAIGN.yaml"><code>dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml</code></a></li>
     </ul>

@@ -5,10 +5,10 @@ description: "Integration of theory observables, limits, and recast efficiencies
 
 <div class="wired-card">
   <div class="wired-card-header">
-    <span>// MODULE_SPEC: dihiggs_boundary</span>
+    <span>// module · dihiggs_boundary</span>
     <span class="wired-pill">SIGNAL YIELD & INTEGRATION</span>
   </div>
-  <div class="wired-grid" style="margin: 0; font-size: 0.82rem;">
+  <div class="wired-grid">
     <div><strong>REPOSITORY:</strong> <a href="https://github.com/fbientrigo/dihiggs_boundary">fbientrigo/dihiggs_boundary</a></div>
     <div><strong>PINNED COMMIT:</strong> <code>8f032a7</code></div>
     <div><strong>PRIMARY ROLE:</strong> Boundary Integration & Limits</div>
@@ -22,8 +22,11 @@ The `dihiggs_boundary` module serves as the integration engine merging theory ob
 - **Observable Synthesis**: Combines $(m_{H_2}, g_{hH_2H_2}, c\tau, \text{BR}_{bb})$ with direct $\sigma_{\text{production}}$ and Trackless $A_{\text{eff}}(c\tau)$.
 - **Limit Integration**: Enriches parameter points with experimental exclusion limits from HiggsBounds and HiggsSignals.
 - **Signal Yield Calculations**:
+
   $$\sigma_{4b} = \sigma_{\text{production}} \times \text{BR}(H_2 \to b\bar{b})^2$$
+
   $$\sigma_{\text{visible}} = \sigma_{4b} \times A_{\text{eff}}$$
+
   $$N_{\text{expected}} = \mathcal{L} \times \sigma_{\text{visible}}$$
 - **Execution Boundaries**: Does not execute MadGraph or Pythia directly; consumes certified upstream campaign artifacts.
 
@@ -41,5 +44,4 @@ The `dihiggs_boundary` module serves as the integration engine merging theory ob
 
 ## API Reference
 
-- [dihiggs_boundary C++ Evaluator Reference](/api/cpp/project/boundary/)
-- [dihiggs_boundary Python Reference (`dhb`)](/api/python/dihiggs-boundary/)
+Symbols for this module are listed per source file in the [API reference](/api/); the coverage table links to each group.

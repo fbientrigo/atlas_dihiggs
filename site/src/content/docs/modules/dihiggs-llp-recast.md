@@ -5,10 +5,10 @@ description: "Public ATLAS displaced-vertex plus jets search reproduction and re
 
 <div class="wired-card">
   <div class="wired-card-header">
-    <span>// MODULE_SPEC: dihiggs_llp_recast</span>
+    <span>// module · dihiggs_llp_recast</span>
     <span class="wired-pill">SEARCH BASELINE REPRODUCTION</span>
   </div>
-  <div class="wired-grid" style="margin: 0; font-size: 0.82rem;">
+  <div class="wired-grid">
     <div><strong>REPOSITORY:</strong> <a href="https://github.com/fbientrigo/dihiggs_llp_recast">fbientrigo/dihiggs_llp_recast</a></div>
     <div><strong>PINNED COMMIT:</strong> <code>4d62c29</code></div>
     <div><strong>PRIMARY ROLE:</strong> ATLAS DV+jets Recast</div>
@@ -37,5 +37,4 @@ The `dihiggs_llp_recast` module reproduces the published ATLAS displaced-vertex 
 
 ## API Reference
 
-- [dihiggs_llp_recast C++ Drivers Reference](/api/cpp/project/llp_recast/)
-- [dihiggs_llp_recast Python Reference (`dvrecast`)](/api/python/dihiggs-llp-recast/)
+Symbols for this module are listed per source file in the [API reference](/api/); the coverage table links to each group.

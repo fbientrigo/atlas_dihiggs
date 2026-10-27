@@ -5,10 +5,10 @@ description: "Architecture, roles, and repository contracts across the six indep
 
 <div class="wired-card">
   <div class="wired-card-header">
-    <span>// MODULE_INVENTORY: MULTI-REPOSITORY COORDINATION</span>
-    <span class="wired-pill">6 ACTIVE SUBMODULES</span>
+    <span>// module inventory</span>
+    <span class="wired-pill">6 submodules</span>
   </div>
-  <p style="margin-bottom: 0;">
+  <p>
     The workspace coordinates six independent repositories pinned as Git submodules. Each module maintains its own codebase, build system, test harness, and scientific contracts. To avoid documentation drift, each module's internal contracts and implementation details are maintained within its own repository.
   </p>
 </div>

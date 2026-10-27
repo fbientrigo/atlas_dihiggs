@@ -5,22 +5,19 @@ description: "End-to-end phenomenological simulation, recast, and boundary integ
 
 <div class="wired-card">
   <div class="wired-card-header">
-    <span>// PIPELINE_EXECUTION: END-TO-END PHENOMENOLOGICAL STAGES</span>
-    <span class="wired-pill">STAGE: COMPLETE</span>
+    <span>// six stages</span>
   </div>
-  <p style="margin-bottom: 0;">
+  <p>
     The simulation, recast, and interpretation pipeline spans six distinct stages, passing from analytical theory evaluation to detector response and interactive visualization. Each stage defines an explicit input/output contract; never substitute an output from an unrelated campaign or parameter point.
   </p>
 </div>
 
-```mermaid
-flowchart LR
-    TH["dihiggs<br/>2HDM Theory Evaluator"] --> UFO["dihiggs_ufo<br/>UFO & Pythia Models"]
-    UFO --> MG["dihiggs_hep_cross<br/>MadGraph Cross Sections"]
-    MG --> BD["dihiggs_boundary<br/>Boundary & Limits"]
-    RC["dihiggs_llp_recast<br/>ATLAS DV+jets Recast"] --> BD
-    RC --> VW["recast_viewer<br/>Event & Cutflow Display"]
-```
+<pre class="wired-flow not-content">dihiggs ─▶ dihiggs_ufo ─▶ dihiggs_hep_cross ─▶ dihiggs_boundary
+theory      UFO, Pythia    MadGraph σ            limits, yield
+                                                      ▲
+dihiggs_llp_recast ───────────────────────────────────┤
+DV+jets A_eff                                         │
+        └─▶ recast_viewer (diagnostics)───────────────┘</pre>
 
 ---
 
@@ -35,6 +32,7 @@ Run 2HDMC-based point evaluation to verify theoretical viability and calculate d
   - `DihiggsPointV2Evaluator`: Rectangular grid evaluation in $(m_H, M_2)$ under schema `dihiggs.point.v2`.
 - **Outputs**:
   Theoretical consistency checks (tree-level unitarity, perturbativity, stability/positivity), physical scalar masses ($m_{H_2}, m_A, m_{H^\pm}$), total decay widths ($\Gamma_{\text{total}}$), branching ratios ($\text{BR}(H_2 \to b\bar{b})$), and proper decay length:
+
   $$c\tau = \frac{\hbar c}{\Gamma_{\text{total}}}$$
 
 ---
@@ -55,6 +53,7 @@ Translate theoretical scalar interactions into Monte Carlo simulation drivers:
 Execute hard-scattering matrix-element integration for certified physical points:
 
 - **Coupling Prescription**: Canonical `physical_2HDM` coupling prescription with trilinear coupling:
+
   $$GH\phi\phi = -g_{\text{physical, } h\phi\phi}$$
 - **Key Drivers**: `scripts/run_physical_point_madgraph.py`
 - **Provenance Verification**: Every cross section must have a verified run banner checked with `scripts/madgraph_banner_verification.py`.
@@ -70,6 +69,7 @@ Evaluate displaced-vertex plus jets detection efficiencies using the frozen publ
 - **Benchmark**: $m_{H_2} = 150\text{ GeV}$, $c\tau = 4.32622\text{ mm}$, $H_2 \to b\bar{b}$, `Trackless_Aeff = 0.01573386`
 - **Analysis Mode**: Canonical `original/published Trackless` (R8/R10 response). The separate `modified` analysis mode is a distinct selection and not interchangeable.
 - **Outputs**: Reconstructed acceptance times efficiency response curves:
+
   $$A_{\text{eff}}(c\tau)$$
 
 ---
@@ -80,8 +80,11 @@ Merge physical stages into analysis-ready boundary datasets and compute experime
 
 - **Joins**: Theory observables ($m_{H_2}, g_{hH_2H_2}, c\tau, \text{BR}_{bb}$), experimental constraints (HiggsBounds / HiggsSignals), production cross section $\sigma_{\text{production}}$, and recast response $A_{\text{eff}}$ by `point_id`.
 - **Signal Yield Observables**:
+
   $$\sigma_{4b} = \sigma_{\text{production}} \times \text{BR}(H_2 \to b\bar{b})^2$$
+
   $$\sigma_{\text{visible}} = \sigma_{4b} \times A_{\text{eff}}$$
+
   $$N_{\text{expected}} = \mathcal{L} \times \sigma_{\text{visible}}$$
 - **Validation**: Strict domain validation rejects unphysical extrapolation beyond calibrated domains.
 
