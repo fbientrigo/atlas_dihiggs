@@ -1,670 +1,355 @@
 #!/usr/bin/env python3
-"""
-gen_api.py - Generate per-source-file / per-module Starlight documentation
-from Doxygen XML (C++) and Griffe (Python). Part of ATLAS DiHiggs.
-"""
+"""Generate the API reference (src/content/docs/api/) from Doxygen XML (C++) and griffe (Python).
 
-import os
-import sys
+Every page is one source file / Python module; every source link points at the
+commit pinned by the root repo's submodule gitlink. Paths are repo-relative.
+"""
+import html
 import shutil
 import subprocess
+import sys
 import xml.etree.ElementTree as ET
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-SITE_DIR = ROOT_DIR / "site"
-API_DOCS_DIR = SITE_DIR / "src" / "content" / "docs" / "api"
-TEMP_DIR = SITE_DIR / ".cache"
+ROOT = Path(__file__).resolve().parents[2]
+SITE = ROOT / "site"
+API = SITE / "src" / "content" / "docs" / "api"
+CACHE = SITE / ".cache"
 
-# Add venv to sys.path for Griffe
-for p in (SITE_DIR / ".venv-docs" / "lib").glob("python3.*/site-packages"):
+for p in (SITE / ".venv-docs" / "lib").glob("python3.*/site-packages"):
     sys.path.insert(0, str(p))
-import griffe
+import griffe  # noqa: E402
 
-def load_submodule_info() -> dict:
-    """Read repo URLs from .gitmodules and pinned SHAs from git ls-tree HEAD."""
-    urls = {}
-    gitmodules = ROOT_DIR / ".gitmodules"
-    if gitmodules.exists():
-        curr = None
-        for line in gitmodules.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line.startswith('[submodule "') and line.endswith('"]'):
-                curr = line[12:-2]
-            elif line.startswith("url =") and curr:
-                u = line.split("=", 1)[1].strip()
-                urls[curr] = u[:-4] if u.endswith(".git") else u
+# --- source links -----------------------------------------------------------
 
-    commits = {}
-    try:
-        res = subprocess.run(
-            ["git", "-C", str(ROOT_DIR), "ls-tree", "HEAD"],
-            capture_output=True, text=True, check=True
-        )
-        for line in res.stdout.splitlines():
-            parts = line.split()
-            if len(parts) >= 4 and parts[1] == "commit":
-                commits[parts[3]] = parts[2]
-    except Exception as e:
-        print(f"[!] Warning reading git ls-tree: {e}", file=sys.stderr)
 
-    return {name: {"url": url, "commit": commits.get(name, "main")} for name, url in urls.items()}
+def submodules() -> dict:
+    """{name: {url, commit}} from .gitmodules and `git ls-tree HEAD`."""
+    urls, name = {}, None
+    for line in (ROOT / ".gitmodules").read_text().splitlines():
+        line = line.strip()
+        if line.startswith("[submodule"):
+            name = line.split('"')[1]
+        elif line.startswith("url =") and name:
+            urls[name] = line.split("=", 1)[1].strip().removesuffix(".git")
+    tree = subprocess.run(["git", "-C", str(ROOT), "ls-tree", "HEAD"], capture_output=True, text=True, check=True).stdout
+    commits = {l.split()[3]: l.split()[2] for l in tree.splitlines() if l.split()[1] == "commit"}
+    return {n: {"url": u, "commit": commits.get(n, "main")} for n, u in urls.items()}
 
-SUBMODULE_INFO = load_submodule_info()
 
-def get_file_info(filepath: str, lineno: int | str = ""):
-    """Return (repo_rel_path, github_link) with no local absolute paths."""
-    norm = Path(filepath).as_posix()
-    root_str = ROOT_DIR.as_posix()
-    ws_rel = norm[len(root_str):].lstrip("/") if norm.startswith(root_str) else norm.lstrip("/")
+SUBS = submodules()
 
-    for mod_name, info in SUBMODULE_INFO.items():
-        if ws_rel == mod_name or ws_rel.startswith(mod_name + "/"):
-            repo_rel = ws_rel[len(mod_name):].lstrip("/")
-            link = f"{info['url']}/blob/{info['commit']}/{repo_rel}"
-            if lineno:
-                link += f"#L{lineno}"
-            return repo_rel, link
 
-    link = f"https://github.com/fbientrigo/atlas_dihiggs/blob/main/{ws_rel}"
-    if lineno:
-        link += f"#L{lineno}"
-    return ws_rel, link
+def source(path, line="") -> tuple[str, str]:
+    """(repo-relative path, GitHub URL at the pinned commit) for an absolute or workspace path."""
+    p = Path(path).as_posix()
+    ws = p.removeprefix(ROOT.as_posix()).lstrip("/")
+    for mod, info in SUBS.items():
+        if ws.startswith(mod + "/"):
+            rel = ws[len(mod) + 1:]
+            return rel, f"{info['url']}/blob/{info['commit']}/{rel}" + (f"#L{line}" if line else "")
+    return ws, f"https://github.com/fbientrigo/atlas_dihiggs/blob/main/{ws}" + (f"#L{line}" if line else "")
 
-def find_doxygen() -> str:
-    local_opt = Path.home() / ".local" / "opt" / "doxygen" / "bin" / "doxygen"
-    if local_opt.is_file() and os.access(local_opt, os.X_OK):
-        return str(local_opt)
-    dox = shutil.which("doxygen")
-    if dox:
-        return dox
-    raise RuntimeError("doxygen binary not found!")
 
-def run_doxygen(xml_out_dir: Path):
-    dox_bin = find_doxygen()
-    doxyfile_content = f"""
-PROJECT_NAME           = "ATLAS DiHiggs C++ API"
-OUTPUT_DIRECTORY       = "{xml_out_dir}"
-GENERATE_LATEX         = NO
-GENERATE_HTML          = NO
-GENERATE_XML           = YES
-XML_OUTPUT             = xml
-INPUT                  = {ROOT_DIR}/dihiggs/dihiggs/src \\
-                         {ROOT_DIR}/dihiggs/2hdmc/src \\
-                         {ROOT_DIR}/dihiggs/higgstools/src \\
-                         {ROOT_DIR}/dihiggs/higgstools/include \\
-                         {ROOT_DIR}/dihiggs_boundary/src \\
-                         {ROOT_DIR}/dihiggs_hep_cross/campaigns/20261007_positive_g_envelope/final_review_snapshot \\
-                         {ROOT_DIR}/dihiggs_llp_recast/src \\
-                         {ROOT_DIR}/recast_viewer/preprocess/instrumentation
-RECURSIVE              = YES
-FILE_PATTERNS          = *.h *.hpp *.hh *.cpp *.cc *.cxx
-EXTRACT_ALL            = YES
-EXTRACT_PRIVATE        = NO
-EXTRACT_STATIC         = YES
-QUIET                  = YES
-WARNINGS               = NO
-XML_PROGRAMLISTING     = NO
-"""
-    xml_out_dir.mkdir(parents=True, exist_ok=True)
-    (xml_out_dir / "Doxyfile").write_text(doxyfile_content, encoding="utf-8")
-    subprocess.run([dox_bin, str(xml_out_dir / "Doxyfile")], check=True, capture_output=True)
-
-def clean_xml_text(elem) -> str:
-    if elem is None:
-        return ""
-    text = "".join(elem.itertext()).strip()
-    return " ".join(line.strip() for line in text.splitlines() if line.strip())
-
-# Module definitions
-CPP_MODULES = [
-    {
-        "id": "2hdmc", "name": "2HDMC", "group": "Base", "lang": "C++", "module": "dihiggs",
-        "dir": API_DOCS_DIR / "cpp" / "base" / "2hdmc", "patterns": ["dihiggs/2hdmc/src"],
-        "url_prefix": "/api/cpp/base/2hdmc",
-    },
-    {
-        "id": "higgstools", "name": "HiggsTools", "group": "Base", "lang": "C++", "module": "dihiggs",
-        "dir": API_DOCS_DIR / "cpp" / "base" / "higgstools", "patterns": ["dihiggs/higgstools/src", "dihiggs/higgstools/include"],
-        "url_prefix": "/api/cpp/base/higgstools",
-    },
-    {
-        "id": "dihiggs", "name": "dihiggs (C++)", "group": "Project", "lang": "C++", "module": "dihiggs",
-        "dir": API_DOCS_DIR / "cpp" / "project" / "dihiggs", "patterns": ["dihiggs/dihiggs/src"],
-        "url_prefix": "/api/cpp/project/dihiggs",
-    },
-    {
-        "id": "boundary", "name": "dihiggs_boundary (C++)", "group": "Project", "lang": "C++", "module": "dihiggs_boundary",
-        "dir": API_DOCS_DIR / "cpp" / "project" / "boundary", "patterns": ["dihiggs_boundary/src"],
-        "url_prefix": "/api/cpp/project/boundary",
-    },
-    {
-        "id": "hep_cross", "name": "dihiggs_hep_cross (C++)", "group": "Project", "lang": "C++", "module": "dihiggs_hep_cross",
-        "dir": API_DOCS_DIR / "cpp" / "project" / "hep_cross", "patterns": ["dihiggs_hep_cross"],
-        "url_prefix": "/api/cpp/project/hep_cross",
-    },
-    {
-        "id": "llp_recast", "name": "dihiggs_llp_recast (C++)", "group": "Project", "lang": "C++", "module": "dihiggs_llp_recast",
-        "dir": API_DOCS_DIR / "cpp" / "project" / "llp_recast", "patterns": ["dihiggs_llp_recast/src", "recast_viewer/preprocess/instrumentation"],
-        "url_prefix": "/api/cpp/project/llp_recast",
-    },
+# --- module table -----------------------------------------------------------
+# (id, label, group, submodule owning the commit, source patterns, output dir)
+CPP = [
+    ("2hdmc", "2HDMC", "Base library", "dihiggs", ["dihiggs/2hdmc/src"], "cpp/base/2hdmc"),
+    ("higgstools", "HiggsTools", "Base library", "dihiggs", ["dihiggs/higgstools/src", "dihiggs/higgstools/include"], "cpp/base/higgstools"),
+    ("dihiggs", "dihiggs", "Project", "dihiggs", ["dihiggs/dihiggs/src"], "cpp/project/dihiggs"),
+    ("boundary", "boundary", "Project", "dihiggs_boundary", ["dihiggs_boundary/src"], "cpp/project/boundary"),
+    ("hep_cross", "hep_cross", "Project", "dihiggs_hep_cross", ["dihiggs_hep_cross"], "cpp/project/hep_cross"),
+    ("llp_recast", "llp_recast", "Project", "dihiggs_llp_recast", ["dihiggs_llp_recast/src", "recast_viewer/preprocess/instrumentation"], "cpp/project/llp_recast"),
+]
+CPP_INPUT = [
+    "dihiggs/dihiggs/src", "dihiggs/2hdmc/src", "dihiggs/higgstools/src", "dihiggs/higgstools/include",
+    "dihiggs_boundary/src", "dihiggs_hep_cross/campaigns/20261007_positive_g_envelope/final_review_snapshot",
+    "dihiggs_llp_recast/src", "recast_viewer/preprocess/instrumentation",
+]
+# (output dir, label, submodule, [("pkg", name, search path) | ("scripts", dir)])
+PY = [
+    ("dihiggs", "dihiggs", "dihiggs", [("pkg", "orchestrator", "dihiggs/dihiggs/app"), ("pkg", "lib", "dihiggs/mlpython"), ("scripts", "dihiggs/scripts")]),
+    ("dihiggs-boundary", "boundary", "dihiggs_boundary", [("pkg", "dhb", "dihiggs_boundary/python"), ("scripts", "dihiggs_boundary/scripts")]),
+    ("dihiggs-hep-cross", "hep_cross", "dihiggs_hep_cross", [("pkg", "llp_recast", "dihiggs_hep_cross/src"), ("scripts", "dihiggs_hep_cross/scripts")]),
+    ("dihiggs-llp-recast", "llp_recast", "dihiggs_llp_recast", [("pkg", "dvrecast", "dihiggs_llp_recast/src"), ("scripts", "dihiggs_llp_recast/scripts")]),
+    ("dihiggs-ufo", "ufo", "dihiggs_ufo", [
+        ("pkg", "pack_aa_kinematic_validation", "dihiggs_ufo/studies/pack_aa_kinematic_validation/src"),
+        ("pkg", "pack_a_seed_mc", "dihiggs_ufo/studies/pack_a_seed_mc/src"), ("scripts", "dihiggs_ufo/scripts")]),
+    ("recast-viewer", "recast_viewer", "recast_viewer", [("pkg", "preprocess", "recast_viewer")]),
 ]
 
-PYTHON_MODULES = [
-    {
-        "id": "dihiggs", "name": "dihiggs (Python)", "group": "Project", "lang": "Python", "module": "dihiggs",
-        "dir": API_DOCS_DIR / "python" / "dihiggs", "url_prefix": "/api/python/dihiggs",
-        "targets": [
-            {"type": "pkg", "name": "orchestrator", "search": str(ROOT_DIR / "dihiggs" / "dihiggs" / "app")},
-            {"type": "pkg", "name": "lib", "search": str(ROOT_DIR / "dihiggs" / "mlpython")},
-            {"type": "scripts", "dir": ROOT_DIR / "dihiggs" / "scripts"},
-        ],
-    },
-    {
-        "id": "dihiggs-boundary", "name": "dihiggs_boundary (Python)", "group": "Project", "lang": "Python", "module": "dihiggs_boundary",
-        "dir": API_DOCS_DIR / "python" / "dihiggs-boundary", "url_prefix": "/api/python/dihiggs-boundary",
-        "targets": [
-            {"type": "pkg", "name": "dhb", "search": str(ROOT_DIR / "dihiggs_boundary" / "python")},
-            {"type": "scripts", "dir": ROOT_DIR / "dihiggs_boundary" / "scripts"},
-        ],
-    },
-    {
-        "id": "dihiggs-hep-cross", "name": "dihiggs_hep_cross (Python)", "group": "Project", "lang": "Python", "module": "dihiggs_hep_cross",
-        "dir": API_DOCS_DIR / "python" / "dihiggs-hep-cross", "url_prefix": "/api/python/dihiggs-hep-cross",
-        "targets": [
-            {"type": "pkg", "name": "llp_recast", "search": str(ROOT_DIR / "dihiggs_hep_cross" / "src")},
-            {"type": "scripts", "dir": ROOT_DIR / "dihiggs_hep_cross" / "scripts"},
-        ],
-    },
-    {
-        "id": "dihiggs-llp-recast", "name": "dihiggs_llp_recast (Python)", "group": "Project", "lang": "Python", "module": "dihiggs_llp_recast",
-        "dir": API_DOCS_DIR / "python" / "dihiggs-llp-recast", "url_prefix": "/api/python/dihiggs-llp-recast",
-        "targets": [
-            {"type": "pkg", "name": "dvrecast", "search": str(ROOT_DIR / "dihiggs_llp_recast" / "src")},
-            {"type": "scripts", "dir": ROOT_DIR / "dihiggs_llp_recast" / "scripts"},
-        ],
-    },
-    {
-        "id": "dihiggs-ufo", "name": "dihiggs_ufo (Python)", "group": "Project", "lang": "Python", "module": "dihiggs_ufo",
-        "dir": API_DOCS_DIR / "python" / "dihiggs-ufo", "url_prefix": "/api/python/dihiggs-ufo",
-        "targets": [
-            {"type": "pkg", "name": "pack_aa_kinematic_validation", "search": str(ROOT_DIR / "dihiggs_ufo" / "studies" / "pack_aa_kinematic_validation" / "src")},
-            {"type": "pkg", "name": "pack_a_seed_mc", "search": str(ROOT_DIR / "dihiggs_ufo" / "studies" / "pack_a_seed_mc" / "src")},
-            {"type": "scripts", "dir": ROOT_DIR / "dihiggs_ufo" / "scripts"},
-        ],
-    },
-    {
-        "id": "recast-viewer", "name": "recast_viewer (Python)", "group": "Project", "lang": "Python", "module": "recast_viewer",
-        "dir": API_DOCS_DIR / "python" / "recast-viewer", "url_prefix": "/api/python/recast-viewer",
-        "targets": [
-            {"type": "pkg", "name": "preprocess", "search": str(ROOT_DIR / "recast_viewer")},
-        ],
-    },
-]
+# --- C++ (Doxygen) ----------------------------------------------------------
 
-def parse_cpp_doxygen(xml_dir: Path):
-    """Parse Doxygen XML and organize symbols strictly per source file."""
-    index_path = xml_dir / "index.xml"
-    if not index_path.exists():
-        return {}
 
-    root = ET.parse(index_path).getroot()
+def run_doxygen(out: Path):
+    dox = Path.home() / ".local/opt/doxygen/bin/doxygen"
+    exe = str(dox) if dox.is_file() else shutil.which("doxygen")
+    if not exe:
+        sys.exit("doxygen not found")
+    out.mkdir(parents=True, exist_ok=True)
+    inputs = " \\\n    ".join(str(ROOT / d) for d in CPP_INPUT)
+    (out / "Doxyfile").write_text(f"""OUTPUT_DIRECTORY = "{out}"
+GENERATE_LATEX = NO
+GENERATE_HTML = NO
+GENERATE_XML = YES
+INPUT = {inputs}
+RECURSIVE = YES
+FILE_PATTERNS = *.h *.hpp *.hh *.cpp *.cc *.cxx
+EXTRACT_ALL = YES
+EXTRACT_STATIC = YES
+QUIET = YES
+WARNINGS = NO
+XML_PROGRAMLISTING = NO
+""")
+    subprocess.run([exe, str(out / "Doxyfile")], check=True, capture_output=True)
+
+
+def text(e) -> str:
+    return " ".join("".join(e.itertext()).split()) if e is not None else ""
+
+
+def cpp_symbol(mem, fpath) -> dict:
+    loc = mem.find("location")
+    line = loc.attrib.get("line", "") if loc is not None else ""
+    brief = text(mem.find("briefdescription"))
+    detail = mem.find("detaileddescription")
+    params = [(text(i.find("parameternamelist")), text(i.find("parameterdescription")))
+              for i in mem.iter("parameteritem")]
+    ret = next((text(s) for s in mem.iter("simplesect") if s.attrib.get("kind") == "return"), "")
+    sig = f"{text(mem.find('type'))} {mem.findtext('name', '')}{mem.findtext('argsstring', '')}".strip()
+    return dict(name=mem.findtext("name", ""), sig=sig, doc=brief or text(detail).split(" Parameters ")[0],
+                params=params, ret=ret, line=line, link=source(fpath, line)[1])
+
+
+def parse_cpp(xml: Path) -> dict:
+    """{source file: {mod, classes, funcs}} for files belonging to a configured module."""
     files = {}
 
-    def get_or_create_file(fpath: str):
+    def entry(fpath):
         if fpath not in files:
-            repo_rel, link = get_file_info(fpath)
-            mod_cfg = None
             norm = fpath.replace("\\", "/")
-            for m in CPP_MODULES:
-                for pat in m["patterns"]:
-                    if pat in norm:
-                        mod_cfg = m
-                        break
-                if mod_cfg:
-                    break
-            files[fpath] = {
-                "file_path": fpath, "repo_rel": repo_rel, "github_link": link,
-                "module": mod_cfg, "classes": [], "free_symbols": [],
-            }
+            mod = next((m for m in CPP if any(p in norm for p in m[4])), None)
+            files[fpath] = dict(mod=mod, classes=[], funcs=[])
         return files[fpath]
 
-    for comp in root.findall("compound"):
-        kind = comp.attrib.get("kind")
-        refid = comp.attrib.get("refid")
-        comp_file = xml_dir / f"{refid}.xml"
-        if not comp_file.exists():
+    def keep(mem, in_class):
+        name, kind = mem.findtext("name", ""), mem.attrib.get("kind")
+        if name == "main" or name.startswith(("_", "@")) or "anon" in name or kind == "define":
+            return False
+        if mem.attrib.get("prot") == "private":
+            return False
+        if kind == "variable":
+            return "const" in text(mem.find("type")) and (not in_class or mem.attrib.get("static") == "yes")
+        return not in_class or kind in ("function", "typedef", "enum")
+
+    for comp in ET.parse(xml / "index.xml").getroot().findall("compound"):
+        kind, path = comp.attrib["kind"], xml / f"{comp.attrib['refid']}.xml"
+        if kind not in ("file", "class", "struct") or not path.exists():
             continue
-
+        cdef = ET.parse(path).getroot().find("compounddef")
+        loc = cdef.find("location") if cdef is not None else None
+        fpath = loc.attrib.get("file", "") if loc is not None else ""
+        if not fpath or cdef.attrib.get("prot") == "private":
+            continue
+        f = entry(fpath)
+        if not f["mod"]:
+            continue
+        mems = [m for s in cdef.findall("sectiondef") for m in s.findall("memberdef")]
         if kind == "file":
-            c_def = ET.parse(comp_file).getroot().find("compounddef")
-            if c_def is None:
+            is_src = fpath.endswith((".cpp", ".cc", ".cxx"))
+            f["funcs"] += [cpp_symbol(m, fpath) for m in mems if keep(m, False) and not (is_src and m.attrib.get("static") == "yes")]
+        else:
+            name = cdef.findtext("compoundname", "").strip()
+            if name.startswith(("@", "__")) or "anon" in name:
                 continue
-            loc = c_def.find("location")
-            fpath = loc.attrib.get("file", "") if loc is not None else ""
-            if not fpath:
-                continue
-            fdata = get_or_create_file(fpath)
-            if not fdata["module"]:
-                continue
-
-            is_cpp = fpath.endswith((".cpp", ".cc", ".cxx"))
-            for sec in c_def.findall("sectiondef"):
-                for mem in sec.findall("memberdef"):
-                    m_kind = mem.attrib.get("kind")
-                    m_name = mem.findtext("name", "")
-                    if m_name == "main" or m_name.startswith(("_", "@")) or "anon" in m_name:
-                        continue
-                    if m_kind == "define":
-                        continue
-                    if is_cpp and mem.attrib.get("static") == "yes":
-                        continue
-                    if m_kind == "variable":
-                        v_type = clean_xml_text(mem.find("type"))
-                        if "const" not in v_type:
-                            continue
-
-                    m_loc = mem.find("location")
-                    line = m_loc.attrib.get("line", "") if m_loc is not None else ""
-                    m_type = clean_xml_text(mem.find("type"))
-                    m_args = mem.findtext("argsstring", "")
-                    doc = clean_xml_text(mem.find("briefdescription")) or clean_xml_text(mem.find("detaileddescription"))
-                    _, m_link = get_file_info(fpath, line)
-
-                    fdata["free_symbols"].append({
-                        "kind": m_kind, "name": m_name, "sig": f"{m_type} {m_name}{m_args}".strip(),
-                        "doc": doc, "line": line, "link": m_link, "documented": bool(doc),
-                    })
-
-        elif kind in ("class", "struct"):
-            c_def = ET.parse(comp_file).getroot().find("compounddef")
-            if c_def is None or c_def.attrib.get("prot") == "private":
-                continue
-            c_name = c_def.findtext("compoundname", "").strip()
-            if c_name.startswith(("@", "__")) or "anon" in c_name:
-                continue
-
-            loc = c_def.find("location")
-            fpath = loc.attrib.get("file", "") if loc is not None else ""
-            c_line = loc.attrib.get("line", "") if loc is not None else ""
-            if not fpath:
-                continue
-            fdata = get_or_create_file(fpath)
-            if not fdata["module"]:
-                continue
-
-            c_doc = clean_xml_text(c_def.find("briefdescription")) or clean_xml_text(c_def.find("detaileddescription"))
-            _, c_link = get_file_info(fpath, c_line)
-
-            methods = []
-            for sec in c_def.findall("sectiondef"):
-                for mem in sec.findall("memberdef"):
-                    if mem.attrib.get("prot") == "private":
-                        continue
-                    m_kind = mem.attrib.get("kind")
-                    m_name = mem.findtext("name", "")
-                    if m_name.startswith(("@", "__")):
-                        continue
-                    if m_kind == "variable":
-                        v_type = clean_xml_text(mem.find("type"))
-                        if mem.attrib.get("static") != "yes" or "const" not in v_type:
-                            continue
-                    elif m_kind not in ("function", "typedef", "enum"):
-                        continue
-
-                    m_loc = mem.find("location")
-                    line = m_loc.attrib.get("line", "") if m_loc is not None else ""
-                    m_type = clean_xml_text(mem.find("type"))
-                    m_args = mem.findtext("argsstring", "")
-                    doc = clean_xml_text(mem.find("briefdescription")) or clean_xml_text(mem.find("detaileddescription"))
-                    _, m_link = get_file_info(fpath, line)
-
-                    methods.append({
-                        "kind": m_kind, "name": m_name, "sig": f"{m_type} {m_name}{m_args}".strip(),
-                        "doc": doc, "line": line, "link": m_link, "documented": bool(doc),
-                    })
-
-            fdata["classes"].append({
-                "kind": kind, "name": c_name, "doc": c_doc, "line": c_line,
-                "link": c_link, "documented": bool(c_doc), "methods": methods,
-            })
-
+            line = loc.attrib.get("line", "")
+            c = dict(name=name, sig=f"{kind} {name}", doc=text(cdef.find("briefdescription")) or text(cdef.find("detaileddescription")),
+                     params=[], ret="", line=line, link=source(fpath, line)[1])
+            c["methods"] = [cpp_symbol(m, fpath) for m in mems if keep(m, True)]
+            f["classes"].append(c)
     return files
 
-def extract_python_modules():
-    """Extract Python symbols per module via Griffe static AST inspection."""
-    results = defaultdict(list)
 
-    for mod_cfg in PYTHON_MODULES:
-        mod_id = mod_cfg["id"]
+# --- Python (griffe) --------------------------------------------------------
 
-        for item in mod_cfg["targets"]:
-            if item["type"] == "pkg":
-                pkg_name = item["name"]
-                search = item["search"]
-                try:
-                    loader = griffe.GriffeLoader(search_paths=[search])
-                    pkg = loader.load(pkg_name, try_relative_path=False)
-                    all_mods = [pkg] + list(pkg.modules.values())
-                    for m in all_mods:
-                        m_file = str(m.filepath) if m.filepath else ""
-                        if not m_file:
-                            continue
-                        repo_rel, link = get_file_info(m_file)
-                        mod_data = parse_griffe_module(m, repo_rel, link, mod_cfg)
-                        if mod_data:
-                            results[mod_id].append(mod_data)
-                except Exception as e:
-                    print(f"[!] Warning loading Python package {pkg_name}: {e}", file=sys.stderr)
 
-            elif item["type"] == "scripts":
-                sdir = item["dir"]
-                if not sdir.exists():
-                    continue
-                loader = griffe.GriffeLoader(search_paths=[str(sdir)])
-                for pyfile in sorted(sdir.glob("*.py")):
-                    if pyfile.name.startswith("__"):
-                        continue
-                    try:
-                        sm = loader.load(pyfile.stem, try_relative_path=False)
-                        repo_rel, link = get_file_info(str(pyfile))
-                        mod_data = parse_griffe_module(sm, repo_rel, link, mod_cfg, is_script=True)
-                        if mod_data:
-                            results[mod_id].append(mod_data)
-                    except Exception:
-                        continue
+def py_symbol(mem, repo_rel, kind="def") -> dict:
+    doc = mem.docstring.value.strip() if mem.docstring else ""
+    params, ret = [], ""
+    if mem.docstring:
+        try:
+            for sec in mem.docstring.parse("google"):
+                if sec.kind.value == "parameters":
+                    params = [(p.name, p.description.strip()) for p in sec.value]
+                elif sec.kind.value == "returns":
+                    ret = " ".join(r.description.strip() for r in sec.value)
+        except Exception:
+            pass
+    line = mem.lineno or 1
+    if kind == "def":
+        args = ", ".join(f"{p.name}{': ' + str(p.annotation) if p.annotation else ''}{' = ' + str(p.default) if p.default else ''}"
+                         for p in mem.parameters)
+        sig = f"def {mem.name}({args})" + (f" -> {mem.returns}" if mem.returns else "")
+    else:
+        sig = f"class {mem.name}"
+    return dict(name=mem.name, sig=sig, doc=doc.split("\n\n")[0].replace("\n", " "), params=params, ret=ret,
+                line=line, link=source(mem.filepath or repo_rel, line)[1])
 
-    return results
 
-def parse_griffe_module(module, repo_rel: str, link: str, mod_cfg: dict, is_script: bool = False):
-    """Parse a single Griffe module into classes and functions with junk filtered."""
-    classes = []
-    functions = []
-    has_public = any(not name.startswith("_") for name, mem in module.members.items() if not mem.is_alias)
+def parse_py_module(m, repo_rel, is_script) -> dict:
+    members = [x for n, x in m.members.items() if not x.is_alias and not n.startswith("_")]
+    classes, funcs = [], []
+    for x in members:
+        if x.is_function:
+            funcs.append(py_symbol(x, repo_rel))
+        elif x.is_class:
+            c = py_symbol(x, repo_rel, "class")
+            c["methods"] = [py_symbol(y, repo_rel) for n, y in x.members.items()
+                            if not y.is_alias and y.is_function and (not n.startswith("_") or n == "__init__")]
+            classes.append(c)
+    title = Path(repo_rel).name if is_script else m.canonical_path
+    return dict(title=title, repo_rel=repo_rel, classes=classes, funcs=funcs)
 
-    for name, mem in module.members.items():
-        if mem.is_alias:
-            continue
-        if has_public and name.startswith("_") and name != "__init__":
-            continue
-        if name.startswith("__") and name != "__init__":
-            continue
 
-        doc = mem.docstring.value.strip() if mem.docstring else ""
-        lineno = mem.lineno or 1
-        _, m_link = get_file_info(str(mem.filepath or repo_rel), lineno)
-
-        if mem.is_function:
-            params = [f"{p.name}{f': {p.annotation}' if p.annotation else ''}{f' = {p.default}' if p.default else ''}" for p in mem.parameters]
-            sig = f"def {name}({', '.join(params)})"
-            if mem.returns:
-                sig += f" -> {mem.returns}"
-            functions.append({
-                "name": name, "sig": sig, "doc": doc, "line": lineno, "link": m_link, "documented": bool(doc),
-            })
-
-        elif mem.is_class:
-            methods = []
-            for m_name, m_mem in mem.members.items():
-                if m_mem.is_alias or (m_name.startswith("_") and m_name != "__init__"):
-                    continue
-                if m_mem.is_function:
-                    m_doc = m_mem.docstring.value.strip() if m_mem.docstring else ""
-                    m_params = [f"{p.name}{f': {p.annotation}' if p.annotation else ''}" for p in m_mem.parameters]
-                    m_sig = f"def {m_name}({', '.join(m_params)})"
-                    if m_mem.returns:
-                        m_sig += f" -> {m_mem.returns}"
-                    _, sub_link = get_file_info(str(m_mem.filepath or repo_rel), m_mem.lineno or lineno)
-                    methods.append({
-                        "name": m_name, "sig": m_sig, "doc": m_doc, "line": m_mem.lineno or lineno, "link": sub_link, "documented": bool(m_doc),
-                    })
-            classes.append({
-                "name": name, "sig": f"class {name}", "doc": doc, "line": lineno, "link": m_link, "documented": bool(doc), "methods": methods,
-            })
-
-    title = f"{module.canonical_path}" if not is_script else f"{Path(repo_rel).name}"
-    return {
-        "title": title, "repo_rel": repo_rel, "github_link": link,
-        "module": mod_cfg, "classes": classes, "functions": functions, "is_script": is_script,
-    }
-
-def render_file_markdown(title: str, repo_rel: str, github_link: str, classes: list, free_symbols: list, lang: str) -> str:
-    """Render a single source file page without coverage clutter, grouping overloads."""
-    total_classes = len(classes)
-    total_funcs = sum(len(c["methods"]) for c in classes) + len(free_symbols)
-    doc_count = sum(1 for c in classes if c["documented"]) + \
-                sum(1 for c in classes for m in c["methods"] if m["documented"]) + \
-                sum(1 for s in free_symbols if s["documented"])
-    total_syms = total_classes + total_funcs
-    pct = (doc_count / total_syms * 100) if total_syms > 0 else 100.0
-
-    lines = [
-        "---",
-        f"title: \"{title}\"",
-        f"description: \"API documentation for {repo_rel}\"",
-        "---",
-        "",
-        '<div class="file-header">',
-        f'  <div><strong>Path:</strong> <code>{repo_rel}</code></div>',
-        f'  <div><strong>Source:</strong> <a href="{github_link}" target="_blank" rel="noopener">GitHub</a></div>',
-        f'  <div><strong>Symbols:</strong> {total_classes} classes, {total_funcs} functions ({pct:.1f}% documented)</div>',
-        '</div>',
-        "",
-    ]
-
-    if not classes and not free_symbols:
-        lines.append("*No public API symbols defined in this source file.*")
-        lines.append("")
-        return "\n".join(lines)
-
-    if classes:
-        lines.append("## Classes & Structs\n")
-        for c in classes:
-            c_doc_badge = "" if c["documented"] else ' <span class="wired-pill red">UNDOCUMENTED</span>'
-            lines.append(f"### `{c['name']}`{c_doc_badge}\n*Source: [{repo_rel}:{c['line']}]({c['link']})*\n")
-            if c.get("doc"):
-                lines.append(f"> {c['doc']}\n")
-
-            methods_by_name = defaultdict(list)
-            for m in c.get("methods", []):
-                methods_by_name[m["name"]].append(m)
-
-            if methods_by_name:
-                lines.append("#### Methods\n")
-                for m_name, m_list in sorted(methods_by_name.items()):
-                    if len(m_list) == 1:
-                        m = m_list[0]
-                        m_badge = "" if m["documented"] else ' <span class="wired-pill red">UNDOCUMENTED</span>'
-                        lines.append(f"- **`{m_name}`**{m_badge} &mdash; [`L{m['line']}`]({m['link']})\n```{lang.lower()}\n{m['sig']}\n```")
-                        if m.get("doc"):
-                            lines.append(f"  > {m['doc']}")
-                    else:
-                        lines.append(f"- **`{m_name}`** *(overloads: {len(m_list)})*")
-                        for idx, m in enumerate(m_list, 1):
-                            m_badge = "" if m["documented"] else ' <span class="wired-pill red">UNDOCUMENTED</span>'
-                            lines.append(f"  - Overload {idx}{m_badge} &mdash; [`L{m['line']}`]({m['link']})\n    ```{lang.lower()}\n    {m['sig']}\n    ```")
-                            if m.get("doc"):
-                                lines.append(f"    > {m['doc']}")
-                lines.append("")
-
-    if free_symbols:
-        lines.append("## Free Functions & Constants\n")
-        funcs_by_name = defaultdict(list)
-        for s in free_symbols:
-            funcs_by_name[s["name"]].append(s)
-
-        for s_name, s_list in sorted(funcs_by_name.items()):
-            if len(s_list) == 1:
-                s = s_list[0]
-                s_badge = "" if s["documented"] else ' <span class="wired-pill red">UNDOCUMENTED</span>'
-                lines.append(f"### `{s_name}`{s_badge}\n*Source: [{repo_rel}:{s['line']}]({s['link']})*\n\n```{lang.lower()}\n{s['sig']}\n```\n")
-                if s.get("doc"):
-                    lines.append(f"> {s['doc']}\n")
+def parse_py(label_id, targets) -> list:
+    out = []
+    for t in targets:
+        try:
+            if t[0] == "pkg":
+                pkg = griffe.GriffeLoader(search_paths=[str(ROOT / t[2])]).load(t[1], try_relative_path=False)
+                mods = [(pkg, False)] + [(x, False) for x in pkg.modules.values()]
             else:
-                lines.append(f"### `{s_name}` *(overloads: {len(s_list)})*\n")
-                for idx, s in enumerate(s_list, 1):
-                    s_badge = "" if s["documented"] else ' <span class="wired-pill red">UNDOCUMENTED</span>'
-                    lines.append(f"#### Overload {idx}{s_badge}\n*Source: [{repo_rel}:{s['line']}]({s['link']})*\n\n```{lang.lower()}\n{s['sig']}\n```\n")
-                    if s.get("doc"):
-                        lines.append(f"> {s['doc']}\n")
+                sdir = ROOT / t[1]
+                loader = griffe.GriffeLoader(search_paths=[str(sdir)])
+                mods = []
+                for f in sorted(sdir.glob("*.py")):
+                    if not f.name.startswith("__"):
+                        try:
+                            mods.append((loader.load(f.stem, try_relative_path=False), True))
+                        except Exception:
+                            pass
+            for m, is_script in mods:
+                if m.filepath:
+                    out.append(parse_py_module(m, source(str(m.filepath))[0], is_script))
+        except Exception as e:
+            print(f"[!] {t[1]}: {e}", file=sys.stderr)
+    return sorted(out, key=lambda d: d["title"])
 
-    return "\n".join(lines)
 
-def clean_api_dirs():
-    for base_subdir in ["cpp", "python"]:
-        target = API_DOCS_DIR / base_subdir
-        if target.exists():
-            shutil.rmtree(target)
+# --- rendering --------------------------------------------------------------
+
+
+def stats(classes, funcs):
+    syms = classes + [m for c in classes for m in c["methods"]] + funcs
+    return len(syms), sum(1 for s in syms if s["doc"])
+
+
+def e(s) -> str:
+    return html.escape(str(s), quote=False)
+
+
+def anchor(*parts) -> str:
+    return "-".join("".join(ch if ch.isalnum() else "-" for ch in str(p)).strip("-") for p in parts).lower()
+
+
+def render_symbol(s, lang, level, aid) -> list:
+    """Signature block first, then brief, params/returns table, source link."""
+    tag = "" if s["doc"] else ' <span class="api-tag">undocumented</span>'
+    out = [f'<h{level} id="{aid}" class="api-name"><code>{e(s["name"])}</code>{tag}'
+           f'<a class="api-src" href="{s["link"]}" target="_blank" rel="noopener">source ↗ L{s["line"]}</a></h{level}>',
+           "", f"```{lang}", s["sig"], "```", ""]
+    if s["doc"]:
+        out += [e(s["doc"]), ""]
+    if s["params"] or s["ret"]:
+        out += ['<table class="api-params"><thead><tr><th>Name</th><th>Description</th></tr></thead><tbody>']
+        out += [f"<tr><td><code>{e(n)}</code></td><td>{e(d)}</td></tr>" for n, d in s["params"]]
+        if s["ret"]:
+            out.append(f'<tr><td><em>returns</em></td><td>{e(s["ret"])}</td></tr>')
+        out += ["</tbody></table>", ""]
+    return out
+
+
+def render_page(title, repo_rel, link, classes, funcs, lang, group) -> str:
+    total, doc = stats(classes, funcs)
+    pct = f"{100 * doc / total:.0f}%" if total else "n/a"
+    base = ' <span class="api-badge">base library</span>' if group == "Base library" else ""
+    out = ["---", f'title: "{title}"', f'description: "API of {repo_rel}"', "---", "",
+           f'<div class="api-meta"><code>{e(repo_rel)}</code><a href="{link}" target="_blank" rel="noopener">source ↗</a>'
+           f"<span>{total} symbols · {pct} documented</span>{base}</div>", ""]
+    if not total:
+        return "\n".join(out + ["No public API symbols in this file.", ""])
+    if classes:
+        out += ["## Classes", ""]
+        for c in classes:
+            cid = anchor(c["name"])
+            out += render_symbol(c, lang, 3, cid)
+            if c["methods"]:
+                out += ["<table class=\"api-members\"><tbody>"]
+                out += [f'<tr><td><a href="#{anchor(c["name"], m["name"], m["line"])}"><code>{e(m["name"])}</code></a></td>'
+                        f'<td>{e(m["doc"])}</td></tr>' for m in c["methods"]]
+                out += ["</tbody></table>", ""]
+                for m in c["methods"]:
+                    out += render_symbol(m, lang, 4, anchor(c["name"], m["name"], m["line"]))
+    if funcs:
+        out += ["## Functions & constants", ""]
+        for f in funcs:
+            out += render_symbol(f, lang, 3, anchor(f["name"], f["line"]))
+    return "\n".join(out)
+
 
 def main():
-    print("[*] WIRED // API Generator (AST Per-File)")
-    clean_api_dirs()
+    for sub in ("cpp", "python"):
+        shutil.rmtree(API / sub, ignore_errors=True)
+    run_doxygen(CACHE / "doxygen")
+    cpp = parse_cpp(CACHE / "doxygen" / "xml")
 
-    xml_cache = TEMP_DIR / "doxygen"
-    run_doxygen(xml_cache)
+    rows = []  # (label, lang, group, commit, url, files, total, doc)
 
-    print("[*] Parsing C++ Doxygen AST...")
-    cpp_files = parse_cpp_doxygen(xml_cache / "xml")
+    def emit(dirpath, label, lang, group, sub, pages):
+        d = API / dirpath
+        d.mkdir(parents=True, exist_ok=True)
+        total = doc = 0
+        for title, slug, repo_rel, link, classes, funcs in pages:
+            (d / f"{slug}.md").write_text(render_page(title, repo_rel, link, classes, funcs, "cpp" if lang == "C++" else "python", group))
+            t, k = stats(classes, funcs)
+            total, doc = total + t, doc + k
+        first = f"/api/{dirpath}/{pages[0][1].replace('.', '').lower()}/" if pages else "/api/"
+        rows.append((label, lang, group, SUBS[sub]["commit"][:7], first, len(pages), total, doc))
 
-    print("[*] Parsing Python Griffe AST...")
-    python_by_mod = extract_python_modules()
+    for mid, label, group, sub, _, dirpath in CPP:
+        pages = []
+        for fp, f in sorted(cpp.items(), key=lambda kv: source(kv[0])[0]):
+            if f["mod"] and f["mod"][0] == mid:
+                rel, link = source(fp)
+                pages.append((Path(rel).name, Path(rel).name, rel, link, f["classes"], f["funcs"]))
+        emit(dirpath, label, "C++", group, sub, pages)
 
-    module_stats = []
-    cpp_by_mod = defaultdict(list)
-    for fdata in cpp_files.values():
-        if fdata["module"]:
-            cpp_by_mod[fdata["module"]["id"]].append(fdata)
+    for dirpath, label, sub, targets in PY:
+        pages = [(d["title"], d["title"].replace(".", "_").replace("/", "_"), d["repo_rel"],
+                  SUBS[sub]["url"] + "/blob/" + SUBS[sub]["commit"] + "/" + d["repo_rel"], d["classes"], d["funcs"])
+                 for d in parse_py(dirpath, targets)]
+        emit(f"python/{dirpath}", label, "Python", "Project", sub, pages)
 
-    for m in CPP_MODULES:
-        m_id = m["id"]
-        out_dir = m["dir"]
-        out_dir.mkdir(parents=True, exist_ok=True)
-        flist = sorted(cpp_by_mod.get(m_id, []), key=lambda x: x["repo_rel"])
+    total, doc = sum(r[6] for r in rows), sum(r[7] for r in rows)
+    out = ["---", 'title: "API reference"', 'description: "C++ and Python symbols per source file, with coverage."', "---", "",
+           f'<p class="api-lead">{total} public symbols across {sum(r[5] for r in rows)} source files, '
+           f"{100 * doc / total:.0f}% with a docstring. Every entry links to its line on GitHub at the pinned commit. "
+           "Search any symbol with <kbd>/</kbd> or <kbd>Ctrl</kbd> <kbd>K</kbd>.</p>", "",
+           "## Coverage", "",
+           "| Module | Language | Origin | Pinned | Files | Symbols | Documented |", "|---|---|---|---|---|---|---|"]
+    for label, lang, group, commit, url, files, t, k in sorted(rows, key=lambda r: r[2] != "Project"):
+        pct = 100 * k / t if t else 0
+        origin = '<span class="api-badge">base library</span>' if group == "Base library" else "project"
+        out.append(f'| [{label}]({url}) | {lang} | {origin} | `{commit}` | {files} | {t} | '
+                   f'<span class="cov"><i style="width:{pct:.0f}%"></i></span> {f"{pct:.0f}%" if t else "n/a"} |')
+    out += ["", "## Conventions", "",
+            "- One page per C++ source file or Python module; classes list their members first, details follow.",
+            "- Only public classes, methods, enums, typedefs and constants are listed; private helpers and CLI entry points are not.",
+            "- Base libraries (2HDMC, HiggsTools) are vendored inside `dihiggs` and carry their own documentation style."]
+    (API / "index.md").write_text("\n".join(out) + "\n")
+    print(f"[+] {len(rows)} modules, {total} symbols, {100 * doc / total:.0f}% documented")
 
-        m_total, m_doc = 0, 0
-        first_url = None
-
-        for fdata in flist:
-            fname = Path(fdata["repo_rel"]).name
-            md_name = f"{fname}.md"
-            out_file = out_dir / md_name
-
-            c_cnt = len(fdata["classes"])
-            f_cnt = sum(len(c["methods"]) for c in fdata["classes"]) + len(fdata["free_symbols"])
-            d_cnt = sum(1 for c in fdata["classes"] if c["documented"]) + \
-                    sum(1 for c in fdata["classes"] for method in c["methods"] if method["documented"]) + \
-                    sum(1 for s in fdata["free_symbols"] if s["documented"])
-
-            m_total += (c_cnt + f_cnt)
-            m_doc += d_cnt
-
-            page_url = f"{m['url_prefix']}/{fname.replace('.', '').lower()}/"
-            if not first_url:
-                first_url = page_url
-
-            content = render_file_markdown(
-                title=fname, repo_rel=fdata["repo_rel"], github_link=fdata["github_link"],
-                classes=fdata["classes"], free_symbols=fdata["free_symbols"], lang="cpp"
-            )
-            out_file.write_text(content, encoding="utf-8")
-
-        pct = (m_doc / m_total * 100) if m_total > 0 else 100.0
-        module_stats.append({
-            "name": m["name"], "lang": m["lang"], "group": m["group"],
-            "commit": SUBMODULE_INFO.get(m["module"], {}).get("commit", "main")[:7],
-            "total": m_total, "doc": m_doc, "pct": pct,
-            "url": first_url or f"{m['url_prefix']}/", "files": len(flist),
-        })
-
-    for m in PYTHON_MODULES:
-        m_id = m["id"]
-        out_dir = m["dir"]
-        out_dir.mkdir(parents=True, exist_ok=True)
-        mod_list = sorted(python_by_mod.get(m_id, []), key=lambda x: x["title"])
-
-        m_total, m_doc = 0, 0
-        first_url = None
-
-        for pdata in mod_list:
-            slug = pdata["title"].replace(".", "_").replace("/", "_")
-            md_name = f"{slug}.md"
-            out_file = out_dir / md_name
-
-            c_cnt = len(pdata["classes"])
-            f_cnt = sum(len(c["methods"]) for c in pdata["classes"]) + len(pdata["functions"])
-            d_cnt = sum(1 for c in pdata["classes"] if c["documented"]) + \
-                    sum(1 for c in pdata["classes"] for method in c["methods"] if method["documented"]) + \
-                    sum(1 for s in pdata["functions"] if s["documented"])
-
-            m_total += (c_cnt + f_cnt)
-            m_doc += d_cnt
-
-            page_url = f"{m['url_prefix']}/{slug.lower()}/"
-            if not first_url:
-                first_url = page_url
-
-            content = render_file_markdown(
-                title=pdata["title"], repo_rel=pdata["repo_rel"], github_link=pdata["github_link"],
-                classes=pdata["classes"], free_symbols=pdata["functions"], lang="python"
-            )
-            out_file.write_text(content, encoding="utf-8")
-
-        pct = (m_doc / m_total * 100) if m_total > 0 else 100.0
-        module_stats.append({
-            "name": m["name"], "lang": m["lang"], "group": m["group"],
-            "commit": SUBMODULE_INFO.get(m["module"], {}).get("commit", "main")[:7],
-            "total": m_total, "doc": m_doc, "pct": pct,
-            "url": first_url or f"{m['url_prefix']}/", "files": len(mod_list),
-        })
-
-    total_all = sum(s["total"] for s in module_stats)
-    doc_all = sum(s["doc"] for s in module_stats)
-    overall_pct = (doc_all / total_all * 100) if total_all > 0 else 100.0
-
-    index_lines = [
-        "---",
-        "title: \"API Reference & Code Coverage\"",
-        "description: \"Comprehensive C++ and Python API index across base libraries and workspace modules.\"",
-        "---",
-        "",
-        '<div class="wired-card">',
-        '  <div class="wired-card-header">',
-        '    <span>// CODEBASE_AUDIT: WORKSPACE SYMBOL COVERAGE</span>',
-        f'    <span class="wired-pill">{doc_all}/{total_all} DOCUMENTED ({overall_pct:.1f}%)</span>',
-        '  </div>',
-        '  <p style="font-size: 0.85rem; margin-bottom: 0; color: var(--sl-color-gray-1);">',
-        '    Static code inspection parses Doxygen XML AST for C++ and Griffe AST for Python. Every symbol links directly to its source line on GitHub at the pinned submodule commit.',
-        '  </p>',
-        '</div>',
-        "",
-        "## Submodule Coverage Matrix",
-        "",
-        "| Module | Language | Base / Project | Pinned Commit | Files | Symbols | % Documented |",
-        "|---|---|---|---|---|---|---|",
-    ]
-
-    for s in module_stats:
-        index_lines.append(
-            f"| [**{s['name']}**]({s['url']}) | `{s['lang']}` | {s['group']} | `{s['commit']}` | {s['files']} | {s['total']} | {s['pct']:.1f}% |"
-        )
-
-    index_lines.extend([
-        "",
-        "## Navigation Architecture",
-        "",
-        "- **Per-File Documentation**: Each C++ source file and Python module has its own dedicated documentation page.",
-        "- **Clean Symbol Filters**: Only public classes, methods, enums, typedefs, and constants are cataloged; local variables, internal helpers, and CLI entry points are excluded.",
-        "- **Direct Pinned Provenance**: All paths are repository-relative and link directly to pinned submodule commits on GitHub.",
-    ])
-
-    (API_DOCS_DIR / "index.md").write_text("\n".join(index_lines), encoding="utf-8")
-
-    total_pages = sum(s["files"] for s in module_stats) + 1
-    gen_lines = len(Path(__file__).read_text(encoding="utf-8").splitlines())
-    print(f"\n[+] Generated {total_pages} API documentation pages across {len(module_stats)} modules.")
-    print(f"[+] Total symbols audited: {total_all} ({overall_pct:.1f}% documented).")
-    print(f"[+] Generator line count: {gen_lines} lines.\n")
 
 if __name__ == "__main__":
     main()
