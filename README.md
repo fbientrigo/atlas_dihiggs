@@ -47,4 +47,4 @@ Scientific validity in this workspace is governed by explicit contracts:
 **Rule**: Never infer physics authority from file timestamps or local presence. Only artifacts registered in the active campaign YAML are authoritative.
 
 ---
-Full documentation, toolchain guides, and module specifications are available in the [documentation site](docs/).
+Full documentation, toolchain guides, and module specifications are available in the [documentation site](site/).

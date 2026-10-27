@@ -1,0 +1,20 @@
+{
+  "name": "atlas-dihiggs-docs",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "api": "python3 scripts/gen_api.py"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.32.5",
+    "astro": "5.18.2",
+    "sharp": "0.33.5"
+  },
+  "devDependencies": {
+    "playwright": "1.50.1"
+  }
+}

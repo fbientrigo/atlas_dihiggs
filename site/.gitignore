@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.astro/
+.cache/
+.venv-docs/
+src/content/docs/api/

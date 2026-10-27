@@ -1,0 +1,269 @@
+/* Wired / Serial Experiments Lain Theme for Starlight */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+
+:root {
+  --sl-font-system: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  --sl-font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+
+  /* Wired Light Theme (Primary) */
+  --sl-color-accent-low: #fee2e2;
+  --sl-color-accent: #dc2626;
+  --sl-color-accent-high: #991b1b;
+  
+  --sl-color-white: #18181b;
+  --sl-color-gray-1: #27272a;
+  --sl-color-gray-2: #3f3f46;
+  --sl-color-gray-3: #52525b;
+  --sl-color-gray-4: #a1a1aa;
+  --sl-color-gray-5: #e4e4e7;
+  --sl-color-gray-6: #f4f4f5;
+  --sl-color-black: #fbfbfa;
+
+  --sl-color-bg: #fbfbfa;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #f8f8f7;
+  --sl-color-bg-inline-code: #f4f4f5;
+
+  --sl-color-hairline-light: #e4e4e7;
+  --sl-color-hairline: #18181b;
+  --sl-color-hairline-shade: #27272a;
+
+  --sl-color-text: #18181b;
+  --sl-color-text-accent: #dc2626;
+  --sl-color-text-invert: #ffffff;
+
+  /* Custom Wired Tokens */
+  --wired-red: #dc2626;
+  --wired-red-dim: rgba(220, 38, 38, 0.08);
+  --wired-border: #18181b;
+  --wired-border-faint: #d4d4d8;
+  --wired-bg-panel: #ffffff;
+}
+
+[data-theme='dark'] {
+  --sl-color-accent-low: #450a0a;
+  --sl-color-accent: #ef4444;
+  --sl-color-accent-high: #fca5a5;
+
+  --sl-color-white: #f4f4f5;
+  --sl-color-gray-1: #e4e4e7;
+  --sl-color-gray-2: #d4d4d8;
+  --sl-color-gray-3: #a1a1aa;
+  --sl-color-gray-4: #52525b;
+  --sl-color-gray-5: #27272a;
+  --sl-color-gray-6: #18181b;
+  --sl-color-black: #09090b;
+
+  --sl-color-bg: #09090b;
+  --sl-color-bg-nav: #121214;
+  --sl-color-bg-sidebar: #0f0f11;
+  --sl-color-bg-inline-code: #18181b;
+
+  --sl-color-hairline-light: #27272a;
+  --sl-color-hairline: #3f3f46;
+  --sl-color-hairline-shade: #18181b;
+
+  --sl-color-text: #f4f4f5;
+  --sl-color-text-accent: #f87171;
+  --sl-color-text-invert: #09090b;
+
+  --wired-red: #ef4444;
+  --wired-red-dim: rgba(239, 68, 68, 0.15);
+  --wired-border: #3f3f46;
+  --wired-border-faint: #27272a;
+  --wired-bg-panel: #121214;
+}
+
+/* Sharp zero-radius everywhere */
+*, *::before, *::after {
+  border-radius: 0 !important;
+}
+
+/* Crisp technical selection */
+::selection {
+  background-color: var(--wired-red-dim);
+  color: var(--sl-color-text);
+}
+
+/* Sharp Technical Borders */
+header.header {
+  border-bottom: 2px solid var(--sl-color-hairline) !important;
+  background-color: var(--sl-color-bg-nav) !important;
+  position: relative;
+}
+
+/* Subtle Lain scanline accent on top bar only (does not obstruct text) */
+header.header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--wired-red) 0px,
+    var(--wired-red) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  pointer-events: none;
+}
+
+/* Sidebar styling: crisp protocol lines */
+nav.sidebar {
+  border-right: 1px solid var(--sl-color-hairline) !important;
+  font-size: 0.8rem;
+}
+
+.sidebar-content a[aria-current="page"] {
+  background-color: var(--wired-red-dim) !important;
+  border-left: 3px solid var(--wired-red) !important;
+  color: var(--sl-color-text) !important;
+  font-weight: 600 !important;
+}
+
+/* Headings: Monospace Uppercase with Protocol styling */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--sl-font-system);
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  color: var(--sl-color-text);
+}
+
+.main-pane h1 {
+  border-bottom: 2px solid var(--sl-color-hairline);
+  padding-bottom: 0.4rem;
+  margin-bottom: 1.5rem;
+  text-transform: uppercase;
+}
+
+.main-pane h2 {
+  border-bottom: 1px solid var(--wired-border-faint);
+  padding-bottom: 0.3rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+.main-pane h2::before {
+  content: '// ';
+  color: var(--wired-red);
+  font-weight: bold;
+}
+
+.main-pane h3::before {
+  content: '> ';
+  color: var(--sl-color-gray-3);
+}
+
+/* Tables: Technical wire grid */
+.sl-markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--sl-color-hairline) !important;
+  font-size: 0.82rem;
+  margin: 1.5rem 0;
+}
+
+.sl-markdown-content th {
+  background-color: var(--sl-color-bg-sidebar);
+  border: 1px solid var(--sl-color-hairline) !important;
+  padding: 8px 12px;
+  font-weight: 700;
+  text-align: left;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.sl-markdown-content td {
+  border: 1px solid var(--wired-border-faint) !important;
+  padding: 8px 12px;
+}
+
+/* Code blocks: High contrast crisp borders */
+.sl-markdown-content pre, .expressive-code {
+  border: 1px solid var(--sl-color-hairline) !important;
+  box-shadow: none !important;
+}
+
+/* Badges and tags */
+.sl-badge {
+  border: 1px solid var(--sl-color-hairline) !important;
+  font-size: 0.7rem !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+/* Callouts / Asides */
+.starlight-aside {
+  border: 1px solid var(--sl-color-hairline) !important;
+  border-left-width: 4px !important;
+  background-color: var(--wired-bg-panel) !important;
+}
+
+.starlight-aside--note {
+  border-left-color: var(--sl-color-hairline) !important;
+}
+
+.starlight-aside--danger {
+  border-left-color: var(--wired-red) !important;
+}
+
+.starlight-aside--tip {
+  border-left-color: #0284c7 !important;
+}
+
+/* Custom Wired Components & Utilities */
+.wired-card {
+  border: 1px solid var(--sl-color-hairline);
+  background-color: var(--wired-bg-panel);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.wired-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--wired-border-faint);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.wired-pill {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid var(--sl-color-hairline);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--sl-color-bg-sidebar);
+}
+
+.wired-pill.red {
+  border-color: var(--wired-red);
+  color: var(--wired-red);
+  background: var(--wired-red-dim);
+}
+
+.wired-pill.green {
+  border-color: #10b981;
+  color: #047857;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.wired-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
