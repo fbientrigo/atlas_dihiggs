@@ -6,7 +6,7 @@ description: "End-to-end phenomenological simulation, recast, and boundary integ
 <div class="wired-card">
   <div class="wired-card-header">
     <span>// PIPELINE_EXECUTION: END-TO-END PHENOMENOLOGICAL STAGES</span>
-    <span class="wired-pill green">STAGE: COMPLETE</span>
+    <span class="wired-pill">STAGE: COMPLETE</span>
   </div>
   <p style="margin-bottom: 0;">
     The simulation, recast, and interpretation pipeline spans six distinct stages, passing from analytical theory evaluation to detector response and interactive visualization. Each stage defines an explicit input/output contract; never substitute an output from an unrelated campaign or parameter point.

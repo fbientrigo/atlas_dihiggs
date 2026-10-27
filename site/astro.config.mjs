@@ -45,16 +45,64 @@ export default defineConfig({
           items: [
             { label: 'API Overview & Coverage', link: '/api/' },
             {
-              label: 'C++ Base Libraries',
-              autogenerate: { directory: 'api/cpp/base' },
+              label: '2HDMC (C++ Base)',
+              collapsed: true,
+              autogenerate: { directory: 'api/cpp/base/2hdmc' },
             },
             {
-              label: 'C++ Project Code',
-              autogenerate: { directory: 'api/cpp/project' },
+              label: 'HiggsTools (C++ Base)',
+              collapsed: true,
+              autogenerate: { directory: 'api/cpp/base/higgstools' },
             },
             {
-              label: 'Python Modules',
-              autogenerate: { directory: 'api/python' },
+              label: 'dihiggs (C++)',
+              collapsed: true,
+              autogenerate: { directory: 'api/cpp/project/dihiggs' },
+            },
+            {
+              label: 'dihiggs_boundary (C++)',
+              collapsed: true,
+              autogenerate: { directory: 'api/cpp/project/boundary' },
+            },
+            {
+              label: 'dihiggs_hep_cross (C++)',
+              collapsed: true,
+              autogenerate: { directory: 'api/cpp/project/hep_cross' },
+            },
+            {
+              label: 'dihiggs_llp_recast (C++)',
+              collapsed: true,
+              autogenerate: { directory: 'api/cpp/project/llp_recast' },
+            },
+            {
+              label: 'dihiggs (Python)',
+              collapsed: true,
+              autogenerate: { directory: 'api/python/dihiggs' },
+            },
+            {
+              label: 'dihiggs_boundary (Python)',
+              collapsed: true,
+              autogenerate: { directory: 'api/python/dihiggs-boundary' },
+            },
+            {
+              label: 'dihiggs_hep_cross (Python)',
+              collapsed: true,
+              autogenerate: { directory: 'api/python/dihiggs-hep-cross' },
+            },
+            {
+              label: 'dihiggs_llp_recast (Python)',
+              collapsed: true,
+              autogenerate: { directory: 'api/python/dihiggs-llp-recast' },
+            },
+            {
+              label: 'dihiggs_ufo (Python)',
+              collapsed: true,
+              autogenerate: { directory: 'api/python/dihiggs-ufo' },
+            },
+            {
+              label: 'recast_viewer (Python)',
+              collapsed: true,
+              autogenerate: { directory: 'api/python/recast-viewer' },
             },
           ],
         },

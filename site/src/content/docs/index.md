@@ -1,126 +1,79 @@
 ---
 title: "ATLAS DiHiggs & LLP Recast"
-description: "Wired research documentation and API reference for the 2HDM Type-I long-lived scalar and ATLAS DV+jets recast workspace."
+description: "Research workspace investigating long-lived scalars in the 2HDM Type-I framework and reinterpreting ATLAS displaced-vertex plus jets searches."
 template: splash
 hero:
-  tagline: "PROTOCOLS // 2HDM TYPE-I LONG-LIVED SCALARS // RECAST OBSERVATORY"
+  tagline: "Modular phenomenological research workspace investigating long-lived scalars in the 2HDM Type-I framework and reinterpreting ATLAS displaced-vertex plus jets searches."
   actions:
-    - text: "Getting Started"
-      link: /getting-started/
-      icon: right-arrow
-      variant: primary
-    - text: "Explore Pipeline"
+    - text: "Pipeline"
       link: /pipeline/
-      icon: external
-    - text: "API Coverage Matrix"
+      variant: primary
+    - text: "API Reference"
       link: /api/
-      icon: document
+      variant: secondary
 ---
 
 <div class="wired-card">
   <div class="wired-card-header">
-    <span>// PROTOCOL: ATLAS_DIHIGGS_WORKSPACE</span>
-    <span class="wired-pill green">SYSTEM: NOMINAL</span>
+    <span>// QUICK START: REPOSITORY INITIALIZATION</span>
+    <span class="wired-pill">WORKSPACE PROTOCOL</span>
   </div>
-  <p style="margin-bottom: 0.75rem;">
-    Welcome to the <strong>ATLAS DiHiggs &amp; Long-Lived Particle (LLP) Recast</strong> workspace documentation and API observatory.
-  </p>
-  <p style="font-size: 0.85rem; color: var(--sl-color-gray-3); margin-bottom: 0;">
-    This multi-repository environment coordinates an end-to-end phenomenological research pipeline investigating long-lived neutral scalar bosons (<em>H</em><sub>2</sub>) within the <strong>Two-Higgs-Doublet Model (2HDM) Type-I</strong> framework. By focusing on parameter regimes where <em>H</em><sub>2</sub> exhibits macroscopic decay lengths (<em>c</em>&tau; ~ mm to m) and decays dominantly to bottom quarks (<em>H</em><sub>2</sub> &rarr; <em>b</em>b̄), the project reinterprets (recasts) ATLAS displaced-vertex plus jets (DV+jets) search results to extract novel exclusion bounds and evaluate high-luminosity discovery potentials.
-  </p>
-</div>
 
-## Scientific Architecture
+```sh
+# 1. Clone complete workspace with all submodules
+git clone --recursive https://github.com/fbientrigo/atlas_dihiggs.git
 
-The workspace coordinates six Git submodules, passing from Lagrangian theory evaluation to detector response simulation and interactive 3D visualization:
+# 2. Or clone root workspace and initialize a single submodule
+git clone https://github.com/fbientrigo/atlas_dihiggs.git && git submodule update --init <module>
 
-```mermaid
-flowchart LR
-    TH["dihiggs<br/>2HDM Theory Evaluator"] --> UFO["dihiggs_ufo<br/>UFO & Pythia Models"]
-    UFO --> MG["dihiggs_hep_cross<br/>MadGraph Cross Sections"]
-    MG --> BD["dihiggs_boundary<br/>Boundary & Limits"]
-    RC["dihiggs_llp_recast<br/>ATLAS DV+jets Recast"] --> BD
-    RC --> VW["recast_viewer<br/>Event & Cutflow Display"]
+# 3. Verify workspace integrity and submodule pins
+python3 scripts/check_workspace.py
 ```
 
-## Modular Components
+</div>
 
 <div class="wired-grid">
   <div class="wired-card" style="margin-bottom: 0;">
     <div class="wired-card-header">
-      <span>dihiggs // THEORY</span>
-      <span class="wired-pill red">AUTHORITY</span>
+      <span>// PIPELINE</span>
+      <span class="wired-pill">WORKFLOW</span>
     </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0.75rem;">
-      Canonical 2HDM Type-I parameter evaluation, decay widths, branching ratios, lifetime calculation, and parameter space scans. Single source of truth for theory conventions.
+    <p style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--sl-color-gray-1);">
+      Six-stage scientific pipeline connecting 2HDM Lagrangian evaluation, UFO models, MadGraph cross sections, detector acceptance, and limit boundaries.
     </p>
-    <a href="/modules/dihiggs/">View Module Specification &rarr;</a>
+    <a href="/pipeline/">Explore Pipeline Architecture &rarr;</a>
   </div>
 
   <div class="wired-card" style="margin-bottom: 0;">
     <div class="wired-card-header">
-      <span>dihiggs_ufo // UFO</span>
-      <span class="wired-pill">BASELINE</span>
+      <span>// MODULES</span>
+      <span class="wired-pill">6 SUBMODULES</span>
     </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0.75rem;">
-      Universal FeynRules Output models (Pack A) and Pythia 8 decay engines (Pack AA) for long-lived scalar event generation.
+    <p style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--sl-color-gray-1);">
+      Architectural specifications and boundary contracts for theory evaluators, cross-section engines, recast drivers, and 3D visualizers.
     </p>
-    <a href="/modules/dihiggs-ufo/">View Module Specification &rarr;</a>
+    <a href="/modules/">Inspect Submodules &rarr;</a>
   </div>
 
   <div class="wired-card" style="margin-bottom: 0;">
     <div class="wired-card-header">
-      <span>dihiggs_hep_cross // MADGRAPH</span>
-      <span class="wired-pill red">RESULTS</span>
+      <span>// API REFERENCE</span>
+      <span class="wired-pill">C++ &amp; PYTHON</span>
     </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0.75rem;">
-      Matrix-element event generation, production cross-section calculations (&sigma;<sub>production</sub>), run banner verification, and numerical result authority.
+    <p style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--sl-color-gray-1);">
+      Per-file C++ Doxygen AST and per-module Python Griffe references linked directly to pinned GitHub submodule commits.
     </p>
-    <a href="/modules/dihiggs-hep-cross/">View Module Specification &rarr;</a>
+    <a href="/api/">Browse API &amp; Coverage &rarr;</a>
   </div>
 
   <div class="wired-card" style="margin-bottom: 0;">
     <div class="wired-card-header">
-      <span>dihiggs_llp_recast // RECAST</span>
-      <span class="wired-pill">FROZEN</span>
+      <span>// AUTHORITY</span>
+      <span class="wired-pill">PROVENANCE</span>
     </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0.75rem;">
-      Reproduction of the frozen ATLAS displaced-vertex plus jets search baseline, trackless jet selections, and <em>A</em><sub>eff</sub>(<em>c</em>&tau;) response curves.
+    <p style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--sl-color-gray-1);">
+      Physics authority contracts, zero-timestamp inference rules, campaign state tracking, and numerical result verification.
     </p>
-    <a href="/modules/dihiggs-llp-recast/">View Module Specification &rarr;</a>
-  </div>
-
-  <div class="wired-card" style="margin-bottom: 0;">
-    <div class="wired-card-header">
-      <span>dihiggs_boundary // BOUNDARY</span>
-      <span class="wired-pill">LIMITS</span>
-    </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0.75rem;">
-      Enrichment of theory observables with HiggsBounds/HiggsSignals limits, direct production cross sections, and recast efficiencies into analysis-ready boundary atlases.
-    </p>
-    <a href="/modules/dihiggs-boundary/">View Module Specification &rarr;</a>
-  </div>
-
-  <div class="wired-card" style="margin-bottom: 0;">
-    <div class="wired-card-header">
-      <span>recast_viewer // DISPLAY</span>
-      <span class="wired-pill">3D VIEWER</span>
-    </div>
-    <p style="font-size: 0.85rem; margin-bottom: 0.75rem;">
-      Interactive 3D Three.js event display, track geometry inspection, and cutflow counterfactual toggle interface.
-    </p>
-    <a href="/modules/recast-viewer/">View Module Specification &rarr;</a>
+    <a href="/authority/">Review Governance Rules &rarr;</a>
   </div>
 </div>
-
----
-
-## Authority & Governance
-
-Scientific integrity across six independent repositories requires strict governance:
-
-- **Zero Timestamp Authority**: Never infer validity from file timestamps or presence on disk. Only artifacts registered in `CURRENT_CAMPAIGN.yaml` are authoritative.
-- **Convention Separation**: Theory definitions are strictly separated from numerical cross sections and event samples.
-- **Code Reference**: Continuous static code audits inspect Doxygen XML and Griffe AST to ensure full traceability down to exact GitHub lines.
-
-Check the [Physics Authority & Provenance](/authority/) contract and the [API Reference](/api/) for complete details.

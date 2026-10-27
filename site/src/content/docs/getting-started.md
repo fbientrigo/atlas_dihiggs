@@ -6,7 +6,7 @@ description: "Setup, submodule initialization, offline workspace validation, and
 <div class="wired-card">
   <div class="wired-card-header">
     <span>// SYSTEM_SETUP: INITIALIZATION & ENVIRONMENT</span>
-    <span class="wired-pill green">VERIFIED READY</span>
+    <span class="wired-pill">VERIFIED READY</span>
   </div>
   <p style="margin-bottom: 0;">
     This guide walks through cloning the workspace, verifying the local submodule checkouts, executing the six-stage phenomenological pipeline, and configuring the required external physics compilers.

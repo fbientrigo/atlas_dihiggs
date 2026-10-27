@@ -6,7 +6,7 @@ description: "Integration of theory observables, limits, and recast efficiencies
 <div class="wired-card">
   <div class="wired-card-header">
     <span>// MODULE_SPEC: dihiggs_boundary</span>
-    <span class="wired-pill green">SIGNAL YIELD & INTEGRATION</span>
+    <span class="wired-pill">SIGNAL YIELD & INTEGRATION</span>
   </div>
   <div class="wired-grid" style="margin: 0; font-size: 0.82rem;">
     <div><strong>REPOSITORY:</strong> <a href="https://github.com/fbientrigo/dihiggs_boundary">fbientrigo/dihiggs_boundary</a></div>

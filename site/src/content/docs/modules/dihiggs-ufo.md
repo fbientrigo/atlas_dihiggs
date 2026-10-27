@@ -6,7 +6,7 @@ description: "Universal FeynRules Output models, MadGraph interfaces, and Pythia
 <div class="wired-card">
   <div class="wired-card-header">
     <span>// MODULE_SPEC: dihiggs_ufo</span>
-    <span class="wired-pill green">MODEL RELEASE BASELINE</span>
+    <span class="wired-pill">MODEL RELEASE BASELINE</span>
   </div>
   <div class="wired-grid" style="margin: 0; font-size: 0.82rem;">
     <div><strong>REPOSITORY:</strong> <a href="https://github.com/fbientrigo/dihiggs_ufo">fbientrigo/dihiggs_ufo</a></div>

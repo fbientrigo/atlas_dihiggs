@@ -6,7 +6,7 @@ description: "Source-neutral interactive event display and cutflow explorer."
 <div class="wired-card">
   <div class="wired-card-header">
     <span>// MODULE_SPEC: recast_viewer</span>
-    <span class="wired-pill green">DIAGNOSTIC EVENT DISPLAY</span>
+    <span class="wired-pill">DIAGNOSTIC EVENT DISPLAY</span>
   </div>
   <div class="wired-grid" style="margin: 0; font-size: 0.82rem;">
     <div><strong>REPOSITORY:</strong> <a href="https://github.com/fbientrigo/atlas_recast_viewer">fbientrigo/atlas_recast_viewer</a></div>
