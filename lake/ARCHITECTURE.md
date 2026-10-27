@@ -157,7 +157,7 @@ On (c), proposals are deterministic. `_contexts()` was re-run with the restored 
 6. **The convention SHA is missing for old commits.** `mass_convention_authority` sits inside the run manifests, which are in blobs only. New commits capture it as `conventions`. For old commits, `mh_input_GeV` per row (125.13 vs 125.20) is the measured proxy.
 7. **There are two leaf vocabularies.** The boundary writes `coverage_state` (`adaptive_m2_mesh.py:133`) and `decision_state` (`survivor_adaptive_campaign.py:191`) with different rules. Lake recomputes one `status` from the points, and the boundary's own labels remain in the `boundary_leaves` and `survivor_leaf_aggregate` tables.
 
-## P1: how the next run reads coverage (dihiggs_boundary branch `lake-explored-seed`, not pushed)
+## P1: how the next run reads coverage (dihiggs_boundary `main`, f2b81cd)
 
 `lake explored [filters] --export FILE.csv` writes the view as plain CSV. DuckDB writes shortest round-trip floats, and tan β ≈ 1e7 round-trips exactly (tested). The boundary run reads that CSV with the stdlib, so it never imports lake, DuckDB or rclone.
 
