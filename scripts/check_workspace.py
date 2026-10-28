@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline check: submodules at their pins and clean, convention authority and caches intact."""
+"""Offline check: submodules at their pins and clean, one convention YAML (dihiggs) with the pinned sha."""
 import hashlib, subprocess, sys
 from pathlib import Path
 
@@ -7,10 +7,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CONV = "conventions/physics_conventions.yaml"
-SIDECAR = "conventions/physics_conventions.lock.yaml"
 SHA = "4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6"
 V3 = "physics_conventions_v3"
-CACHES = ("dihiggs_boundary", "dihiggs_hep_cross", "dihiggs_ufo", "dihiggs_llp_recast")
+LOCKS = ("dihiggs_boundary", "dihiggs_hep_cross")  # external_tools.lock.yaml carries the sha pin
 
 
 def git(repo, *args):
@@ -26,7 +25,7 @@ def canonical(commit):  # convention bytes at a dihiggs commit, if it carries th
 def main():
     bad = []
     pins = {}
-    for line in git(".", "ls-tree", "HEAD", "dihiggs", "recast_viewer", *CACHES).decode().splitlines():
+    for line in git(".", "ls-tree", "HEAD", "dihiggs", "recast_viewer", "dihiggs_boundary", "dihiggs_hep_cross", "dihiggs_ufo", "dihiggs_llp_recast").decode().splitlines():
         meta, name = line.split("\t")
         pins[name] = meta.split()[2]
     for name, pin in pins.items():
@@ -37,22 +36,13 @@ def main():
     source = canonical(pins["dihiggs"])
     if source is None:
         bad.append("dihiggs gitlink does not carry the pinned convention bytes")
-    for name in CACHES:
-        repo = ROOT / name
+    for name in LOCKS:
         try:
-            side = yaml.safe_load((repo / SIDECAR).read_text())
-            lock = repo / "external_tools.lock.yaml"
-            lock = yaml.safe_load(lock.read_text()) if lock.is_file() else None
-            cache = (repo / CONV).read_bytes()
-            if cache != source:
-                bad.append(f"{name}: convention cache differs from canonical source")
-            if (side.get("source_sha256"), side.get("schema_version"), side.get("source_path")) != (SHA, V3, CONV) \
-                    or side.get("source_repository") != "fbientrigo/dihiggs" or canonical(side.get("source_commit", "")) is None:
-                bad.append(f"{name}: provenance sidecar missing or stale")
-            if lock and (lock["conventions"].get("sha256"), lock["conventions"].get("schema_version")) != (SHA, V3):
+            lock = yaml.safe_load((ROOT / name / "external_tools.lock.yaml").read_text())["conventions"]
+            if (lock.get("sha256"), lock.get("schema_version")) != (SHA, V3):
                 bad.append(f"{name}: external_tools.lock.yaml convention lock is stale")
-        except (OSError, yaml.YAMLError, AttributeError, KeyError) as exc:
-            bad.append(f"{name}: convention files unreadable: {exc}")
+        except (OSError, yaml.YAMLError, AttributeError, KeyError, TypeError) as exc:
+            bad.append(f"{name}: external_tools.lock.yaml unreadable: {exc}")
     try:
         c = yaml.safe_load((ROOT / "dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml").read_text())
         if c["madgraph"]["authoritative_results"] is not None:

@@ -8,7 +8,7 @@ This file covers the end-to-end exploration pipeline, what each part owns, and w
  dihiggs (canonical evaluator, 2HDMC)            lambda7 is a fixed config scalar, not a scan axis
         │  one dihiggs.point.v2 row per (leaf, profile proposal)
         ▼
- dihiggs_boundary  run  ──►  data/runs/<campaign>/  or  campaigns/survivor_*/
+ dihiggs_boundary  run  ──►  campaigns/<id>/                       
    (adaptive mesh: tan_beta slice × m_phi×Mbar rectangle "leaf";       raw_*_points.csv/.parquet  (all rows, lossless)
     16 LHS proposals in (X=lambda6·tanb, Delta) per leaf;              *_leaves.csv, *_state.json, manifest.json
     leaf has_survivor = any theory_ok_v1 == 1)

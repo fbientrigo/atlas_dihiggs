@@ -66,15 +66,9 @@ The `dihiggs` repository serves as the single source of truth for all theory def
 - **Convention Schema**: `physics_conventions_v3` with cryptographic SHA-256 hash:
   `4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6`.
 
-### Downstream Synchronization
+### Single Source
 
-Four downstream repositories maintain local copies of the convention file:
-1. `dihiggs_boundary`
-2. `dihiggs_hep_cross`
-3. `dihiggs_ufo`
-4. `dihiggs_llp_recast`
-
-Each cache includes a lock sidecar at `conventions/physics_conventions.lock.yaml` recording upstream repository, commit hash, and SHA-256 digest. The workspace validation script (`python3 scripts/check_workspace.py`) enforces that all downstream caches are byte-identical to the canonical source.
+The convention file exists only in `dihiggs`. The downstream modules keep no copy: `dihiggs_hep_cross` reads it at import (sibling checkout, or `$DIHIGGS_ROOT`) and fails with a clear error if it is missing or its SHA-256 differs; the other modules' tests skip when it is absent. `external_tools.lock.yaml` in `dihiggs_boundary` and `dihiggs_hep_cross` carries the SHA-256 pin, and the workspace validation script (`python3 scripts/check_workspace.py`) verifies the file's bytes at the pinned `dihiggs` commit.
 
 ---
 

@@ -40,7 +40,7 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 ### 2. Lightweight Verification Environment
 
-The root repository provides an offline checker to verify submodule revisions, convention caches, and campaign state without requiring heavy physics compilers or simulation software.
+The root repository provides an offline checker to verify submodule revisions, the convention file, and campaign state without requiring heavy physics compilers or simulation software.
 
 Create and activate a minimal virtual environment:
 
@@ -59,8 +59,7 @@ python3 scripts/check_workspace.py
 The checker confirms:
 - Submodule gitlinks match pinned revisions.
 - Local working trees have no untracked modifications.
-- Physics convention caches in downstream modules are byte-identical to the canonical authority commit in `dihiggs`.
-- Provenance sidecars (`conventions/physics_conventions.lock.yaml`) match the v3 schema.
+- The `dihiggs` gitlink carries the pinned convention bytes (SHA-256), and the `external_tools.lock.yaml` pins agree. No downstream module keeps a copy.
 - Campaign registry (`dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml`) maintains a null result authority until formal sign-off.
 
 ---
