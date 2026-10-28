@@ -66,11 +66,11 @@ flowchart LR
 | `tasks/` | FIFO of pending work | GitHub issues | retired: issues #1–#10, removed from git |
 | `experiments/` (461 MB) | dihiggs/hep_cross studies, Oct 10-12 | lake | all 15,869 files already in lake (4 commits, measured); local copy kept, ignored |
 | `mission_runs/` | hep_cross audits Aug/Sep | lake | data in lake (`…-460a7f`, `…-6c5cfd`); local was only `.venv` + caches → deleted; 168 KB symlink skeleton left |
-| `reports/` (657 MB) | λ7 tables → LLP families → cτ control (arrow 10) | dihiggs science, stored in lake | committed to lake; local kept, ignored |
-| `notas/` (4.5 MB) | Overleaf section 09 package | dihiggs science, lake | committed to lake; local kept |
-| `cernbox_catalog/` (28 MB) | catalog of CERNBox `~/cern_db` | lake | committed to lake; local kept |
-| `_handoff/` (+ `HANDOFF_T2_T4.md`, moved in) | session handoffs | lake (history) | committed to lake; local kept |
-| `results/bfb_negative_trilinear_audit/` (+ its test, moved in from `tests/`) | BFB audit, `pytest` 6 passed | dihiggs | committed to lake; see Next cuts |
+| `reports/` (657 MB) | λ7 tables → LLP families → cτ control (arrow 10) | dihiggs science, stored in lake | lake `20261028T024759Z-050cde` (8,997 files, 179 MB blob); local kept, ignored |
+| `notas/` (4.5 MB) | Overleaf section 09 package | dihiggs science, lake | lake `20261028T024535Z-23952e`; local kept |
+| `cernbox_catalog/` (28 MB) | catalog of CERNBox `~/cern_db` | lake | lake `20261028T024555Z-8417aa`; local kept |
+| `_handoff/` (+ `HANDOFF_T2_T4.md`, moved in) | session handoffs | lake (history) | lake `20261028T024444Z-868a77`; local kept |
+| `results/bfb_negative_trilinear_audit/` (+ its test, moved in from `tests/`) | BFB audit, `pytest` 6 passed | dihiggs | lake `20261028T024423Z-991e1b`; see Next cuts N7 |
 | `env.sh` | MG5_HOME + UFO dir for hep_cross | dihiggs_hep_cross | left in place; see Next cuts |
 | `graphify-out/`, `.agy-staff/`, `.claude/`, `.venv/` | tool caches/state | local | kept, ignored |
 | `build/`, `tests/` | empty after the move | junk | deleted |
