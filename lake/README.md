@@ -27,7 +27,7 @@ Queries use only commits and tables, about 180 MB, and never download blobs. The
   - `query "select status, count(*) from explored where lambda7 != 0 group by 1"`
   - `query "select b.point_id, r.producer_commit, r.convention_id from boundary_points b join regimes r on b.commit = r.cid limit 5"` (rows also carry their own `producer_commit`, which is "unknown" in all current data)
 - `ls` lists commits: authority, code HEAD, clean or dirty, and source dir.
-- `sync` commits every local file that no commit covers yet, following the rules in `sources.tsv`, then dry-runs the cleanup. `sync --yes [--older-than 2]` deletes local files, but only if all of these hold:
+- `sync` commits every local file that no commit covers yet and git does not track (git owns tracked files), following the rules in `sources.tsv`, then dry-runs the cleanup. `sync --yes [--older-than 2]` deletes local files, but only if all of these hold:
   - the remote md5 is re-verified;
   - the local sha256 still matches;
   - the file is **not git-tracked**;

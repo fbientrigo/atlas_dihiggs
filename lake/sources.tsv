@@ -15,6 +15,11 @@ dihiggs_hep_cross/artifacts	candidate	yes
 mission_runs/*	forbidden_as_current	yes	
 runs	forbidden_as_current	yes	harness_decisions=jev_harness/decision_events.jsonl
 experiments/*	forbidden_as_current	keep	
+reports	forbidden_as_current	keep	
+notas	forbidden_as_current	keep	
+cernbox_catalog	forbidden_as_current	keep	
+_handoff	forbidden_as_current	keep	
+results	forbidden_as_current	keep	
 dihiggs_llp_recast	candidate	keep	
 dihiggs_ufo	candidate	keep	
 recast_viewer	candidate	keep	

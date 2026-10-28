@@ -74,6 +74,7 @@ The measured result today: all 1,327,904 boundary rows are lambda7 = 0. The run 
 5. `restore` refuses to overwrite a file whose content differs from the commit.
 6. `sync` does not prune a commit whose root contains a nested `keep` row.
 7. `prune` (direct or via `sync`) never deletes a file whose basename matches a `-GLOB` of a `sources.tsv` row at, above or below the commit root. The boundary rows are `yes -*_state.json -*.yaml`, which keeps the state a resumed run reads and the campaign config. The 2026-10-13 sync pruned `campaigns/survivor_adaptive_12520_tanbeta_v2/campaign.yaml`, so 3 boundary tests fail on a fresh checkout until it is restored from `8292bb`.
+8. `sync` never commits a git-tracked file: git owns it (`test_lake.py` `sync_skips_tracked`). Older commits of repo-wide `keep` rows still hold tracked files; see `docs/DATA_FLOW.md` C3.
 
 ### Data-loss paths found and fixed
 

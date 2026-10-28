@@ -457,10 +457,10 @@ def cmd_sync(a):
     rem = _remote(a); recs = records(rem)
     plan, claimed = [], {}
     for d, auth, prune, tables, _ in sources():
-        mine = {}
+        mine, git = {}, tracked(d)  # git owns tracked files; the lake only takes what git does not hold
         for f in scan(d, set()):
             k = str(d / f["path"])
-            if k not in claimed:
+            if k not in claimed and k not in git:
                 claimed[k] = f["sha256"]; mine[k] = f
         if mine:
             plan.append((d, auth, tables, mine))

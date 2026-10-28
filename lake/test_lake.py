@@ -39,6 +39,7 @@ def main():
         except SystemExit:
             pass
     git_guard()
+    sync_skips_tracked()
     explored_and_old_records()
     compact_keep_and_export()
     print("ok")
@@ -75,6 +76,24 @@ def git_guard():
             assert len(list((remote / "commits").glob("*.json"))) == 1
         finally:
             lake.Remote.md5 = real
+
+
+def sync_skips_tracked():
+    """sync commits only what git does not hold: one owner per file."""
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t); src, remote = t / "repo", t / "remote"
+        src.mkdir(); (src / "code.py").write_text("x = 1\n"); (src / "data.csv").write_text("x\n1\n")
+        g = ["git", "-C", str(src), "-c", "user.name=t", "-c", "user.email=t@t"]
+        subprocess.run(g + ["init", "-q"], check=True); subprocess.run(g + ["add", "code.py"], check=True)
+        subprocess.run(g + ["commit", "-qm", "t"], check=True)
+        real = lake.sources
+        lake.sources = lambda: iter([(src, "candidate", False, [], [])])
+        try:
+            lake.cmd_sync(argparse.Namespace(remote=str(remote), yes=False, older_than=0))
+        finally:
+            lake.sources = real
+        (rec,) = lake.records(lake.Remote(str(remote)))
+        assert [f["path"] for f in lake.load_files(lake.Remote(str(remote)), rec)] == ["data.csv"]
 
 
 def explored_and_old_records():
