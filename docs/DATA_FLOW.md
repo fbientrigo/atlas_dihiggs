@@ -18,9 +18,9 @@ flowchart LR
   RUN -->|raw points + leaf aggregate| LAKE[(lake)]
   LAKE -->|explored --export CSV| RUN
   RUN -.->|points CSV, by hand| XS[MadGraph sigma<br/>dihiggs_hep_cross]
-  UFO[UFO model<br/>dihiggs_ufo] -.->|copy in hep_cross/results/r14, absent| XS
-  XS -.->|sigma joined onto rows by hand| SIG[llp_signal -> atlas_v1<br/>dihiggs_boundary]
-  REC[A_eff grid<br/>dihiggs_llp_recast] -.->|calibration YAML: none exists| SIG
+  UFO[UFO model<br/>dihiggs_ufo] -->|releases/r14_runtime| XS
+  XS -->|registered sigma table, dhb.join_signal| SIG[llp_signal -> atlas_v1<br/>dihiggs_boundary]
+  REC[A_eff grid<br/>dihiggs_llp_recast] -->|calibration/trackless_mH150_r7.yaml, nulls: #11| SIG
   EV -.->|dihiggs/campaigns/lambda7_*| REP[reports/ lambda7 studies<br/>root, /home paths]
   UFO -.-> REP
   REP --> LAKE
@@ -34,9 +34,9 @@ flowchart LR
 | 4 | run → lake | campaign dir, blob `tar.zst` + tables `survivor_points`, `survivor_leaf_aggregate` | `lake/sources.tsv:5`, `lake sync` / `lake commit` | code |
 | 5 | lake → next run | `lake explored --export FILE.csv` (`lake/lake.py:425`) | `survivor_adaptive_campaign.py:488` `--explored` | code |
 | 6 | boundary → hep_cross | `--points-csv` / `--point` JSON (`run_physical_point_madgraph.py:513-514`) | no code produces it from a boundary run | **by hand** |
-| 7 | UFO → hep_cross | proc dir from `hep_cross/results/r14_direct_g_production/ufo/…/LLscalar_v3_UFO_runtime` (`generate_physical_point_proc_dir.sh:14-21`, `env.sh:11`) | MadGraph | **ad hoc**: path through the `hep_cross` alias; dir absent locally; the only copy is lake commit `20261014T025456Z-c67ca8`, and 4/15 files (`parameters.py`, `couplings.py`, …) differ from `dihiggs_ufo/LLscalar_v3_UFO_original` |
-| 8 | hep_cross → boundary | `sigma_production_fb`, `sigma_production_unc_fb` columns on each row | `dihiggs_boundary/python/dhb/llp_signal.py:76-92` ("upstream production stage must join these") | **by hand**, no joiner |
-| 9 | llp_recast → boundary | `--calibration` "versioned Trackless response YAML" (`llp_signal.py:225`) | `python/dhb/llp_calibration.py:34` | **missing**: no calibration file is tracked in any repo; `dihiggs_llp_recast/scripts/make_aeff_grid_products.py:83` writes grid CSV/JSON |
+| 7 | UFO → hep_cross | `dihiggs_ufo/releases/r14_runtime/LLscalar_v3_UFO_runtime` (`dihiggs_hep_cross/scripts/env.sh` `DIHIGGS_PHYSICAL_POINT_UFO_DIR`, `generate_physical_point_proc_dir.sh` default) | MadGraph | code (N5): byte-identical to the old r14 copy (lake `20261014T025456Z-c67ca8`); closure σ identical |
+| 8 | hep_cross → boundary | `sigma_production_fb`, `sigma_production_unc_fb` from the CSV named by `dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml` `madgraph.authoritative_results` | `dihiggs_boundary/python/dhb/join_signal.py` (`point_id` key, VALID rows only) | code (N9); registry is `null` today, so no σ is joined |
+| 9 | llp_recast → boundary | `dihiggs_llp_recast/calibration/trackless_mH150_r7.yaml` (values cited from `results/r7_h2_pair_4b/summary.csv`, `docs/R8_PI_RESULT_BRIEF.md:78`) | `dhb.join_signal` → `dhb.llp_signal` → `llp_calibration.py` | code (N9); S95, A_eff unc., mass tolerance, near_fraction are `null` (issue #11), so rows are failure-marked until filled |
 | 10 | dihiggs campaigns → reports | N8: the scripts now live in `dihiggs/studies/<report>/` and read `$DIHIGGS_ROOT` (default: workspace root above the script); they read `dihiggs/campaigns/lambda7_consolidation`, `reports/lambda7_tables_20261014/{BENCHMARKS.csv,mg5}` and write `reports/<name>/` (output only, in lake) | `dihiggs/studies/` | code (N8 done) |
 | 11 | reports → lake | dirs as blobs | `lake/sources.tsv` row `reports` | code (new) |
 
@@ -54,7 +54,7 @@ flowchart LR
 | Event display | recast_viewer | `public/data/` | JSON |
 | Bulk data storage, coverage (`explored`) | lake | `lake/lake.py`, `lake/sources.tsv` | `tar.zst` blobs, Parquet tables |
 | Entry point: README, check, site | root | `README.md`, `scripts/check_workspace.py`, `site/` | — |
-| Pending work | GitHub issues | fbientrigo/atlas_dihiggs #1–#10 (were `tasks/fifo/003–012`) | — |
+| Pending work | GitHub issues | fbientrigo/atlas_dihiggs #1–#11 (#1–#10 were `tasks/fifo/003–012`) | — |
 
 ## Root entries
 
@@ -80,17 +80,17 @@ flowchart LR
 | # | Same responsibility in 2+ places (measured) | Verdict |
 |---|---|---|
 | C1 | Convention YAML in 5 repos, byte-identical (sha256 `4f3a938e…`) | **fixed (N1)**: dihiggs only |
-| C2 | 2HDMC in 3 copies, **not** the same patch: THDM.cpp differs by 218 lines dihiggs↔boundary, 130 dihiggs↔hep_cross, 192 boundary↔hep_cross (dihiggs `fdb708d` now carries `set_param_gen_exact`, `calc_unitarity_spectrum`; boundary `70bbdf3` names them in its title but ports only the m12² cache) | proposal N2 |
+| C2 | 2HDMC in 3 copies, **not** the same patch: THDM.cpp differs by 218 lines dihiggs↔boundary, 130 dihiggs↔hep_cross, 192 boundary↔hep_cross (dihiggs `fdb708d` now carries `set_param_gen_exact`, `calc_unitarity_spectrum`; boundary `70bbdf3` names them in its title but ports only the m12² cache) | **fixed (N2)**: one copy, `dihiggs/2hdmc` |
 | C3 | Same files in git **and** lake, byte-identical: hep_cross 397 files/14.2 MB, ufo 1,397/46.4 MB, recast_viewer 204/629.6 MB, llp_recast 182/1.4 MB (repo-wide `keep` rows snapshot code repos) | **fixed for the future**: `lake sync` skips git-tracked files (`lake/lake.py` `cmd_sync`, test `sync_skips_tracked`); old blobs stay (add-only); git side **fixed (N3)** for hep_cross data and recast_viewer |
 | C4 | Campaign outputs in 4 layouts: `dihiggs/campaigns/` (untracked), `dihiggs_boundary/data/runs/` + `dihiggs_boundary/campaigns/` (ignored), `dihiggs_hep_cross/campaigns/` (227 files tracked) | **fixed (N4)** for boundary (`data/runs` merged into `campaigns/`); hep_cross data untracked by N3, its study code/docs stay tracked |
 | C5 | Root scratch: `results/`, `reports/`, `mission_runs/`, `experiments/`, `notas/` | **fixed**: all in lake under `forbidden_as_current`, one `sources.tsv` row each; nothing new goes at root |
 | C6 | Work tracking in `tasks/`, `docs/audits/`, `HANDOFF_T2_T4.md` | **fixed**: issues #1–#10; audits = history; handoff in `_handoff/` → lake |
-| C7 | Production UFO lives in `hep_cross/results/r14…` (absent locally), not in dihiggs_ufo; differs from `LLscalar_v3_UFO_original` in 4 files | proposal N5 |
+| C7 | Production UFO lives in `hep_cross/results/r14…` (absent locally), not in dihiggs_ufo; differs from `LLscalar_v3_UFO_original` in 4 files | **fixed (N5)**: `dihiggs_ufo/releases/r14_runtime` |
 | C8 | `reports/*.zip` next to the same report dirs | **fixed (N6)**: zips deleted, dirs in lake |
 
-## Next cuts (N1, N3, N4, N6, N7, N8 done; N2, N5, N9 are open)
+## Next cuts (all done)
 
-Done on 2026-10-28 by task L. Commit ids are on the module branches (pushed fast-forward).
+Done on 2026-10-28: N1, N3, N4, N6, N7, N8 by task L; N2, N5, N9 by task M. Commit ids are on the module branches (pushed fast-forward).
 
 | # | Status | What was done | Commits | Removed from git |
 |---|---|---|---|---|
@@ -100,11 +100,7 @@ Done on 2026-10-28 by task L. Commit ids are on the module branches (pushed fast
 | N6 | **done** | `reports/ctau_control_20261020.zip`, `reports/llp_families_20261019.zip` deleted after all 8,997 files of `reports/` matched lake `20261028T024759Z-050cde` by sha256 (the zips are in that commit too) | — (untracked) | 8.2 MB local |
 | N7 | **done** | `env.sh` → `dihiggs_hep_cross/scripts/env.sh` (`DIHIGGS_ROOT` = two levels up); BFB audit + test → `dihiggs/tests/bfb_negative_trilinear_audit/` (6 passed; `.gitignore` exception for its CSV) | hep_cross `3a0860b`, dihiggs `4cf7bea` | 2 root entries |
 | N8 | **done** | 19 scripts of `reports/*/scripts` → `dihiggs/studies/<report>/`, no `/home/fabian`; `dihiggs/studies/ctau_control_20261020/finalize_ctau.py` rerun in a copy: `selected_points.csv`, `raw/ranges.json`, `validated_benchmarks.csv`, `table_ctau_mixed250.tex` identical to the frozen files (`cmp`) | dihiggs `4834b05` | 6→0 hard-coded roots; the other scripts compile, their backends were not rerun |
+| N2 | **done** | `dihiggs/2hdmc` is the one 2HDMC: it already carried everything boundary and hep_cross had (both copies are subsets apart from comments); hep_cross's `GeneralProbe.cpp` moved in. Boundary builds `$DHB_2HDMC_ROOT` (default `../dihiggs/2hdmc`); its CI checks out dihiggs at a pinned sha. **Gates:** boundary `evaluate_point` byte-identical old vs new on the golden input and on 4,000 random points (tanβ 1…1e8, λ6 1e-14…1); the golden oracle test fails exactly as before N2 (max rel 7.8e-10, `p5.width_gg_H2`, present since boundary `70bbdf3`); hep_cross `logs/run_all_probes.py` reproduces its 4 tracked CSVs byte for byte; dihiggs 2hdmc tests 55 pass / 2 skip; boundary 127 pass / 1 fail (that golden test) / 1 skip | dihiggs `a3b4907`, boundary `7162f31`, hep_cross `1b40d56` (deletions, swept into the N5 commit) + `e40d36a` | boundary `lib/2HDMC-1.8.0` (41 files, lake `20261028T200807Z-d116d2`, 41/41 sha256) and hep_cross `2hdmc_build` (83 files, lake `20261013T001001Z-a347d8`, 83/83 sha256) |
+| N5 | **done** | 14 `.py` of the r14 runtime UFO committed as `dihiggs_ufo/releases/r14_runtime/LLscalar_v3_UFO_runtime` (14/14 sha256 = lake `20261014T025456Z-c67ca8`; differs from `_original` in `couplings.py`, `parameters.py`, `write_param_card.py`); `env.sh` and `generate_physical_point_proc_dir.sh` default to it. **Gate:** closure benchmark (m_H2 150, g 63.59, seeds 101/107, 10k events) σ = 0.23025 ± 0.00163 fb with old and new UFO, identical; the frozen 0.230291 fb came from a different setup (1000 events, hep_cross `1da2f70`) and is 0.02% away (test band 3%) | ufo `c41f452`, hep_cross `1b40d56` | 1 hidden dependency |
+| N9 | **done** | `python -m dhb.join_signal --points --registry --calibration --output`: σ only from the registry's `madgraph.authoritative_results` (no `--sigma` flag), VALID rows, duplicate `point_id` fails, then `dhb.llp_signal`. Calibration YAML created from llp_recast artifacts only; missing values `null` + issue #11 (also records the r7/r8 A×ε disagreement at cτ = 4.326 mm). Issue #3 (full end-to-end benchmark) stays open: N9 is its join step, not the benchmark | boundary `1fab1c1`, llp_recast `01fd17c` | by-hand arrows 8, 9 (arrow 6, points → MadGraph, is still by hand) |
 
-Open:
-
-| # | Delete | Replaced by | Risk | Saves |
-|---|---|---|---|---|
-| N2 | `dihiggs_boundary/lib/2HDMC-1.8.0` (41 files, 0.5 MB) and `dihiggs_hep_cross/campaigns/physical_vs_effective_coupling_v1/2hdmc_build` (83 files, 2.2 MB, already in lake `…-a347d8`) | boundary builds `$DHB_2HDMC_ROOT=../dihiggs/2hdmc` (`dihiggs_boundary/scripts/setup_env.sh:8` already has the knob) | **physics numbers can move**: the copies differ, so boundary golden tests (`scripts/generate_golden_evaluate_point.py`) must pass bit-for-bit or the diff is reviewed | 124 files, 2.7 MB |
-| N5 | `hep_cross/results/r14…/ufo` as the production default | `DIHIGGS_PHYSICAL_POINT_UFO_DIR` default → a dihiggs_ufo release that carries the 4 differing files (commit them in dihiggs_ufo first) | σ changes if the wrong UFO is picked; requires the 0.230291 fb closure check | 1 hidden dependency |
-| N9 | by-hand arrows 6, 8, 9 | one `dhb` join step (`point_id` key) from a hep_cross σ table and a tracked llp_recast calibration YAML | authority: σ must come from `CURRENT_CAMPAIGN.yaml`-registered runs only | closes task #3 (issue) |
