@@ -2,14 +2,7 @@
 
 A modular research workspace investigating long-lived scalars ($H_2$) in the 2HDM Type-I framework. The project explores regions where the heavy neutral CP-even scalar $H_2$ decays into Standard Model pairs ($H_2 \to b\bar{b}$) with macroscopic lifetimes ($c\tau \sim \text{mm}$ to $\text{m}$) and reinterprets the ATLAS displaced-vertex plus jets (DV+jets) search for them.
 
-```mermaid
-flowchart LR
-    TH[dihiggs<br/>2HDM Theory & Widths] --> UFO[dihiggs_ufo<br/>UFO & Pythia Models]
-    UFO --> MG[dihiggs_hep_cross<br/>MadGraph Cross Sections]
-    MG --> BD[dihiggs_boundary<br/>Boundary Datasets]
-    RC[dihiggs_llp_recast<br/>ATLAS DV+jets Recast] --> BD
-    RC --> VW[recast_viewer<br/>Event & Cutflow Viewer]
-```
+**Which repo owns what, where its data goes, and what feeds what: [docs/DATA_FLOW.md](docs/DATA_FLOW.md)** (one page, measured from the code).
 
 ## Modular Structure
 

@@ -8,7 +8,7 @@ description: "Setup, submodule initialization, offline workspace validation, and
     <span>// setup</span>
   </div>
   <p>
-    This guide walks through cloning the workspace, verifying the local submodule checkouts, executing the six-stage phenomenological pipeline, and configuring the required external physics compilers.
+    This guide walks through cloning the workspace, verifying the local submodule checkouts, running the pipeline, and configuring the required external physics compilers.
   </p>
 </div>
 
@@ -82,6 +82,6 @@ While the root environment checker only requires Python with `pytest` and `PyYAM
 
 ## Next Steps
 
-- Consult the [Scientific Pipeline](/pipeline/) for the full physics workflow progression.
+- Consult [Data flow & ownership](/pipeline/) for who owns each stage and what each one hands to the next.
 - Read [Physics Authority & Provenance](/authority/) for the mandatory data governance rules.
 - Browse the [API Reference](/api/) for symbol-level documentation of all C++ and Python code.

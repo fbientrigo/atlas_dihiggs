@@ -10,7 +10,7 @@ template: splash
   <p class="lead">Long-lived scalars in the 2HDM Type-I, and the reinterpretation of ATLAS displaced-vertex plus jets searches. Six modules, one pinned workspace.</p>
   <div class="actions not-content">
     <a class="primary" href="/getting-started/">Get started</a>
-    <a href="/pipeline/">Pipeline</a>
+    <a href="/pipeline/">Data flow</a>
     <a href="/api/">API reference</a>
   </div>
 </div>
@@ -34,9 +34,9 @@ python3 scripts/check_workspace.py
 
 <div class="wired-grid">
   <div class="wired-card">
-    <div class="wired-card-header"><span>// pipeline</span><span class="wired-pill">6 stages</span></div>
-    <p>From 2HDM theory evaluation through UFO models, MadGraph cross sections and detector recast to the exclusion boundary.</p>
-    <a href="/pipeline/">Read the pipeline →</a>
+    <div class="wired-card-header"><span>// data flow</span><span class="wired-pill">one owner each</span></div>
+    <p>Which repo owns what, where its data goes, what feeds what, and which handoffs are still by hand.</p>
+    <a href="/pipeline/">Read the data flow →</a>
   </div>
   <div class="wired-card">
     <div class="wired-card-header"><span>// modules</span><span class="wired-pill">6 submodules</span></div>

@@ -14,7 +14,6 @@
 !/.github/
 !/lake/
 !/scripts/
-!/tasks/
 !/site/
 /site/node_modules/
 /site/dist/

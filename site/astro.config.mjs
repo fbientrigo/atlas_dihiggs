@@ -37,7 +37,7 @@ export default defineConfig({
           items: [
             { label: 'Introduction', link: '/' },
             { label: 'Getting started', link: '/getting-started/' },
-            { label: 'Pipeline', link: '/pipeline/' },
+            { label: 'Data flow & ownership', link: '/pipeline/' },
           ],
         },
         {
