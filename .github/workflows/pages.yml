@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - simplify/submodules
   workflow_dispatch:
 
 permissions:
