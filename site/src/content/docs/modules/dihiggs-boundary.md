@@ -1,12 +1,12 @@
 ---
 title: "Module // dihiggs_boundary"
-description: "Integration of theory observables, limits, and recast efficiencies into boundary datasets."
+description: "Integration of theory observables, limits, and production cross sections into boundary datasets."
 ---
 
 <div class="wired-card">
   <div class="wired-card-header">
     <span>// module · dihiggs_boundary</span>
-    <span class="wired-pill">SIGNAL YIELD & INTEGRATION</span>
+    <span class="wired-pill">LIMITS & INTEGRATION</span>
   </div>
   <div class="wired-grid">
     <div><strong>REPOSITORY:</strong> <a href="https://github.com/fbientrigo/dihiggs_boundary">fbientrigo/dihiggs_boundary</a></div>
@@ -17,17 +17,10 @@ description: "Integration of theory observables, limits, and recast efficiencies
 
 ## Scientific Responsibility
 
-The `dihiggs_boundary` module serves as the integration engine merging theory observables, experimental exclusion limits, direct production cross sections, and versioned LLP detector responses:
+The `dihiggs_boundary` module serves as the integration engine merging theory observables, experimental exclusion limits, and direct production cross sections:
 
-- **Observable Synthesis**: Combines $(m_{H_2}, g_{hH_2H_2}, c\tau, \text{BR}_{bb})$ with direct $\sigma_{\text{production}}$ and Trackless $A_{\text{eff}}(c\tau)$.
+- **Observable Synthesis**: Combines $(m_{H_2}, g_{hH_2H_2}, c\tau, \text{BR}_{bb})$ with direct $\sigma_{\text{production}}$ joined by `point_id`.
 - **Limit Integration**: Enriches parameter points with experimental exclusion limits from HiggsBounds and HiggsSignals.
-- **Signal Yield Calculations**:
-
-  $$\sigma_{4b} = \sigma_{\text{production}} \times \text{BR}(H_2 \to b\bar{b})^2$$
-
-  $$\sigma_{\text{visible}} = \sigma_{4b} \times A_{\text{eff}}$$
-
-  $$N_{\text{expected}} = \mathcal{L} \times \sigma_{\text{visible}}$$
 - **Execution Boundaries**: Does not execute MadGraph or Pythia directly; consumes certified upstream campaign artifacts.
 
 ---
@@ -36,9 +29,7 @@ The `dihiggs_boundary` module serves as the integration engine merging theory ob
 
 - [GitHub Repository](https://github.com/fbientrigo/dihiggs_boundary)
 - [Repository README](https://github.com/fbientrigo/dihiggs_boundary#readme)
-- [LLP Signal Contract](https://github.com/fbientrigo/dihiggs_boundary/blob/main/docs/llp_signal_contract.md)
-- [Boundary ATLAS v1 Contract](https://github.com/fbientrigo/dihiggs_boundary/blob/main/docs/boundary_atlas_v1_contract.md)
-- [LLP Signal v1 Modernization](https://github.com/fbientrigo/dihiggs_boundary/blob/main/docs/modernization_llp_signal_v1.md)
+- [Boundary ATLAS Contract](https://github.com/fbientrigo/dihiggs_boundary/blob/main/docs/boundary_atlas_contract.md)
 
 ---
 

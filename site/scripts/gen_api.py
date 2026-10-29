@@ -60,23 +60,19 @@ CPP = [
     ("dihiggs", "dihiggs", "Project", "dihiggs", ["dihiggs/dihiggs/src"], "cpp/project/dihiggs"),
     ("boundary", "boundary", "Project", "dihiggs_boundary", ["dihiggs_boundary/src"], "cpp/project/boundary"),
     ("hep_cross", "hep_cross", "Project", "dihiggs_hep_cross", ["dihiggs_hep_cross"], "cpp/project/hep_cross"),
-    ("llp_recast", "llp_recast", "Project", "dihiggs_llp_recast", ["dihiggs_llp_recast/src", "recast_viewer/preprocess/instrumentation"], "cpp/project/llp_recast"),
 ]
 CPP_INPUT = [
     "dihiggs/dihiggs/src", "dihiggs/2hdmc/src", "dihiggs/higgstools/src", "dihiggs/higgstools/include",
     "dihiggs_boundary/src", "dihiggs_hep_cross/campaigns/20261007_positive_g_envelope/final_review_snapshot",
-    "dihiggs_llp_recast/src", "recast_viewer/preprocess/instrumentation",
 ]
 # (output dir, label, submodule, [("pkg", name, search path) | ("scripts", dir)])
 PY = [
     ("dihiggs", "dihiggs", "dihiggs", [("pkg", "orchestrator", "dihiggs/dihiggs/app"), ("pkg", "lib", "dihiggs/mlpython"), ("scripts", "dihiggs/scripts")]),
     ("dihiggs-boundary", "boundary", "dihiggs_boundary", [("pkg", "dhb", "dihiggs_boundary/python"), ("scripts", "dihiggs_boundary/scripts")]),
     ("dihiggs-hep-cross", "hep_cross", "dihiggs_hep_cross", [("pkg", "llp_recast", "dihiggs_hep_cross/src"), ("scripts", "dihiggs_hep_cross/scripts")]),
-    ("dihiggs-llp-recast", "llp_recast", "dihiggs_llp_recast", [("pkg", "dvrecast", "dihiggs_llp_recast/src"), ("scripts", "dihiggs_llp_recast/scripts")]),
     ("dihiggs-ufo", "ufo", "dihiggs_ufo", [
         ("pkg", "pack_aa_kinematic_validation", "dihiggs_ufo/studies/pack_aa_kinematic_validation/src"),
         ("pkg", "pack_a_seed_mc", "dihiggs_ufo/studies/pack_a_seed_mc/src"), ("scripts", "dihiggs_ufo/scripts")]),
-    ("recast-viewer", "recast_viewer", "recast_viewer", [("pkg", "preprocess", "recast_viewer")]),
 ]
 
 # --- C++ (Doxygen) ----------------------------------------------------------

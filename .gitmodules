@@ -7,12 +7,6 @@
 [submodule "dihiggs_hep_cross"]
 	path = dihiggs_hep_cross
 	url = https://github.com/fbientrigo/dihiggs_hep_cross.git
-[submodule "dihiggs_llp_recast"]
-	path = dihiggs_llp_recast
-	url = https://github.com/fbientrigo/dihiggs_llp_recast.git
 [submodule "dihiggs_ufo"]
 	path = dihiggs_ufo
 	url = https://github.com/fbientrigo/dihiggs_ufo.git
-[submodule "recast_viewer"]
-	path = recast_viewer
-	url = https://github.com/fbientrigo/atlas_recast_viewer.git

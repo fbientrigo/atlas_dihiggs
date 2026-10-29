@@ -26,7 +26,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'ATLAS // DIHIGGS',
-      description: 'Documentation and API reference for the 2HDM di-Higgs and LLP recast workspace.',
+      description: 'Documentation and API reference for the 2HDM di-Higgs workspace.',
       customCss: ['katex/dist/katex.min.css', './src/styles/wired.css'],
       social: { github: 'https://github.com/fbientrigo/atlas_dihiggs' },
       pagination: false,
@@ -47,9 +47,7 @@ export default defineConfig({
             { label: 'dihiggs', link: '/modules/dihiggs/' },
             { label: 'dihiggs_ufo', link: '/modules/dihiggs-ufo/' },
             { label: 'dihiggs_hep_cross', link: '/modules/dihiggs-hep-cross/' },
-            { label: 'dihiggs_llp_recast', link: '/modules/dihiggs-llp-recast/' },
             { label: 'dihiggs_boundary', link: '/modules/dihiggs-boundary/' },
-            { label: 'recast_viewer', link: '/modules/recast-viewer/' },
           ],
         },
         {
@@ -68,13 +66,10 @@ export default defineConfig({
             { label: 'dihiggs · C++', collapsed: true, autogenerate: { directory: 'api/cpp/project/dihiggs' } },
             { label: 'boundary · C++', collapsed: true, autogenerate: { directory: 'api/cpp/project/boundary' } },
             { label: 'hep_cross · C++', collapsed: true, autogenerate: { directory: 'api/cpp/project/hep_cross' } },
-            { label: 'llp_recast · C++', collapsed: true, autogenerate: { directory: 'api/cpp/project/llp_recast' } },
             { label: 'dihiggs · Python', collapsed: true, autogenerate: { directory: 'api/python/dihiggs' } },
             { label: 'boundary · Python', collapsed: true, autogenerate: { directory: 'api/python/dihiggs-boundary' } },
             { label: 'hep_cross · Python', collapsed: true, autogenerate: { directory: 'api/python/dihiggs-hep-cross' } },
-            { label: 'llp_recast · Python', collapsed: true, autogenerate: { directory: 'api/python/dihiggs-llp-recast' } },
             { label: 'ufo · Python', collapsed: true, autogenerate: { directory: 'api/python/dihiggs-ufo' } },
-            { label: 'recast_viewer · Python', collapsed: true, autogenerate: { directory: 'api/python/recast-viewer' } },
           ],
         },
       ],

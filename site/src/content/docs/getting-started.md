@@ -14,15 +14,15 @@ description: "Setup, submodule initialization, offline workspace validation, and
 
 ## Workspace Setup
 
-The root repository coordinates six Git submodules. You can clone the full workspace at once or initialize only specific modules as needed.
+The root repository coordinates four Git submodules. You can clone the full workspace at once or initialize only specific modules as needed.
 
 ### 1. Cloning the Workspace
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 <Tabs>
-  <TabItem label="Full Checkout (All 6 Submodules)">
-    To fetch the root workspace and all six submodules:
+  <TabItem label="Full Checkout (All 4 Submodules)">
+    To fetch the root workspace and all four submodules:
     ```bash
     git clone --recursive https://github.com/fbientrigo/atlas_dihiggs.git atlas_dihiggs
     cd atlas_dihiggs
@@ -72,9 +72,8 @@ While the root environment checker only requires Python with `pytest` and `PyYAM
 |---|---|---|---|
 | **C++17 Compiler & GSL** | `dihiggs` | GCC 9+ / Clang 10+, `libgsl-dev` | Compiles 2HDMC evaluators and parameter scan binaries. |
 | **MadGraph5_aMC@NLO** | `dihiggs_hep_cross` | Version 3.4+ | Hard-scattering event generation and cross section integration. |
-| **Pythia 8 & FastJet** | `dihiggs_ufo`, `dihiggs_llp_recast` | Pythia 8.3+, FastJet 3.4+ | Parton showering, hadronization, displaced decay simulation, and jet clustering. |
+| **Pythia 8 & FastJet** | `dihiggs_ufo` | Pythia 8.3+, FastJet 3.4+ | Parton showering, hadronization, and jet clustering. |
 | **HiggsTools / 2HDMC** | `dihiggs_boundary` | HiggsTools v1.2, 2HDMC v1.8 | Standard Model and BSM Higgs experimental limit testing (HiggsBounds / HiggsSignals). |
-| **Node.js & npm** | `recast_viewer`, `site` | Node.js v20+, npm | Builds and runs the documentation site and 3D event viewer application. |
 | **DuckDB & rclone** | `lake` (optional) | DuckDB 1.0+, rclone | Direct SQL query interface over Parquet lake tables and Google Drive synchronization. |
 
 ---

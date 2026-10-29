@@ -25,7 +25,7 @@ def canonical(commit):  # convention bytes at a dihiggs commit, if it carries th
 def main():
     bad = []
     pins = {}
-    for line in git(".", "ls-tree", "HEAD", "dihiggs", "recast_viewer", "dihiggs_boundary", "dihiggs_hep_cross", "dihiggs_ufo", "dihiggs_llp_recast").decode().splitlines():
+    for line in git(".", "ls-tree", "HEAD", "dihiggs", "dihiggs_boundary", "dihiggs_hep_cross", "dihiggs_ufo").decode().splitlines():
         meta, name = line.split("\t")
         pins[name] = meta.split()[2]
     for name, pin in pins.items():

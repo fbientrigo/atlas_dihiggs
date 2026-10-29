@@ -1,13 +1,13 @@
 ---
-title: "ATLAS DiHiggs & LLP Recast"
-description: "Research workspace for long-lived scalars in the 2HDM Type-I and the reinterpretation of ATLAS displaced-vertex plus jets searches."
+title: "ATLAS DiHiggs"
+description: "Research workspace for long-lived scalars in the 2HDM Type-I: theory points, boundary scans and production cross sections."
 template: splash
 ---
 
 <div class="home-hero">
   <p class="wired-eyebrow"><b>[00]</b> // workspace</p>
-  <h1>ATLAS DiHiggs<br>&amp; LLP Recast</h1>
-  <p class="lead">Long-lived scalars in the 2HDM Type-I, and the reinterpretation of ATLAS displaced-vertex plus jets searches. Six modules, one pinned workspace.</p>
+  <h1>ATLAS DiHiggs</h1>
+  <p class="lead">Long-lived scalars in the 2HDM Type-I: theory points, boundary scans and production cross sections. Four modules, one pinned workspace.</p>
   <div class="actions not-content">
     <a class="primary" href="/getting-started/">Get started</a>
     <a href="/pipeline/">Data flow</a>
@@ -19,7 +19,7 @@ template: splash
   <div class="wired-card-header"><span>// quick start</span><span class="wired-pill">clone</span></div>
 
 ```sh
-# all six modules
+# all four modules
 git clone --recursive https://github.com/fbientrigo/atlas_dihiggs.git
 
 # or one module only
@@ -39,7 +39,7 @@ python3 scripts/check_workspace.py
     <a href="/pipeline/">Read the data flow →</a>
   </div>
   <div class="wired-card">
-    <div class="wired-card-header"><span>// modules</span><span class="wired-pill">6 submodules</span></div>
+    <div class="wired-card-header"><span>// modules</span><span class="wired-pill">4 submodules</span></div>
     <p>What each repository owns, its inputs and outputs, and the contract it keeps with its neighbours.</p>
     <a href="/modules/">Browse modules →</a>
   </div>

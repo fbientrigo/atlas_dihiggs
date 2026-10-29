@@ -1,21 +1,19 @@
-# ATLAS DiHiggs & LLP Recast Workspace
+# ATLAS DiHiggs Workspace
 
-A modular research workspace investigating long-lived scalars ($H_2$) in the 2HDM Type-I framework. The project explores regions where the heavy neutral CP-even scalar $H_2$ decays into Standard Model pairs ($H_2 \to b\bar{b}$) with macroscopic lifetimes ($c\tau \sim \text{mm}$ to $\text{m}$) and reinterprets the ATLAS displaced-vertex plus jets (DV+jets) search for them.
+A modular research workspace investigating long-lived scalars ($H_2$) in the 2HDM Type-I framework. The project explores regions where the heavy neutral CP-even scalar $H_2$ decays into Standard Model pairs ($H_2 \to b\bar{b}$) with macroscopic lifetimes ($c\tau \sim \text{mm}$ to $\text{m}$) and computes their production cross sections. (The ATLAS DV+jets recast was dropped from scope on 2026-10-29; its checkouts were moved to `~/atlas_dihiggs_archive/recast_20261029/`; the GitHub repos stay.)
 
 **Which repo owns what, where its data goes, and what feeds what: [docs/DATA_FLOW.md](docs/DATA_FLOW.md)** (one page, measured from the code).
 
 ## Modular Structure
 
-The workspace coordinates six independent git submodules:
+The workspace coordinates four independent git submodules:
 
 | Module | Purpose & Scope |
 |---|---|
 | [`dihiggs`](dihiggs/) | 2HDM point evaluators, decay widths, theory scans; theory convention authority |
 | [`dihiggs_ufo`](dihiggs_ufo/) | UFO model definitions, Pythia decay configurations, and Monte Carlo integration baselines |
 | [`dihiggs_hep_cross`](dihiggs_hep_cross/) | MadGraph drivers, cross-section calculation, campaign state, and results authority |
-| [`dihiggs_llp_recast`](dihiggs_llp_recast/) | Frozen ATLAS displaced-vertex + jets recast reproduction and scalar adaptations |
-| [`dihiggs_boundary`](dihiggs_boundary/) | Integration of theory points, HB/HS constraints, production cross sections, and LLP responses |
-| [`recast_viewer`](recast_viewer/) | Source-neutral interactive event display and cutflow explorer |
+| [`dihiggs_boundary`](dihiggs_boundary/) | Integration of theory points, HB/HS constraints, and production cross sections |
 
 ## Quick Start
 

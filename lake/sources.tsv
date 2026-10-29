@@ -17,7 +17,5 @@ notas	forbidden_as_current	keep
 cernbox_catalog	forbidden_as_current	keep	
 _handoff	forbidden_as_current	keep	
 results	forbidden_as_current	keep	
-dihiggs_llp_recast	candidate	keep	
 dihiggs_ufo	candidate	keep	
-recast_viewer	candidate	keep	
 /home/fabian/atlas_dihiggs_archive/20260831_pre_madgraph_reset	historical	keep	
