@@ -20,7 +20,7 @@ flowchart LR
   RUN -.->|points CSV, by hand| XS[MadGraph sigma<br/>dihiggs_hep_cross]
   UFO[UFO model<br/>dihiggs_ufo] -->|releases/r14_runtime| XS
   XS -->|registered sigma table, dhb.join_signal| SIG[llp_signal -> atlas_v1<br/>dihiggs_boundary]
-  REC[A_eff grid<br/>dihiggs_llp_recast] -->|calibration/trackless_mH150_r7.yaml, nulls: #11| SIG
+  REC[A_eff grid<br/>dihiggs_llp_recast] -->|calibration/trackless_mH150_r7.yaml, 3 nulls left: #11| SIG
   EV -.->|dihiggs/campaigns/lambda7_*| REP[reports/ lambda7 studies<br/>root, /home paths]
   UFO -.-> REP
   REP --> LAKE
@@ -36,7 +36,7 @@ flowchart LR
 | 6 | boundary → hep_cross | `--points-csv` / `--point` JSON (`run_physical_point_madgraph.py:513-514`) | no code produces it from a boundary run | **by hand** |
 | 7 | UFO → hep_cross | `dihiggs_ufo/releases/r14_runtime/LLscalar_v3_UFO_runtime` (`dihiggs_hep_cross/scripts/env.sh` `DIHIGGS_PHYSICAL_POINT_UFO_DIR`, `generate_physical_point_proc_dir.sh` default) | MadGraph | code (N5): byte-identical to the old r14 copy (lake `20261014T025456Z-c67ca8`); closure σ identical |
 | 8 | hep_cross → boundary | `sigma_production_fb`, `sigma_production_unc_fb` from the CSV named by `dihiggs_hep_cross/state/CURRENT_CAMPAIGN.yaml` `madgraph.authoritative_results` | `dihiggs_boundary/python/dhb/join_signal.py` (`point_id` key, VALID rows only) | code (N9); registry is `null` today, so no σ is joined |
-| 9 | llp_recast → boundary | `dihiggs_llp_recast/calibration/trackless_mH150_r7.yaml` (values cited from `results/r7_h2_pair_4b/summary.csv`, `docs/R8_PI_RESULT_BRIEF.md:78`) | `dhb.join_signal` → `dhb.llp_signal` → `llp_calibration.py` | code (N9); S95, A_eff unc., mass tolerance, near_fraction are `null` (issue #11), so rows are failure-marked until filled |
+| 9 | llp_recast → boundary | `dihiggs_llp_recast/calibration/trackless_mH150_r7.yaml` (values cited from `results/r7_h2_pair_4b/summary.csv`, `docs/R8_PI_RESULT_BRIEF.md:78`) | `dhb.join_signal` → `dhb.llp_signal` → `llp_calibration.py` | code (N9); S95 = 3.0 filled (task N, llp_recast `58369eb`, from hep_cross `atlas_threshold.json`, lake `…-7e0782`); A_eff unc., mass tolerance, near_fraction still `null` (issue #11: no artifact source; A_eff unc. needs the r7-vs-r8 choice), so rows are failure-marked until filled |
 | 10 | dihiggs campaigns → reports | N8: the scripts now live in `dihiggs/studies/<report>/` and read `$DIHIGGS_ROOT` (default: workspace root above the script); they read `dihiggs/campaigns/lambda7_consolidation`, `reports/lambda7_tables_20261014/{BENCHMARKS.csv,mg5}` and write `reports/<name>/` (output only, in lake) | `dihiggs/studies/` | code (N8 done) |
 | 11 | reports → lake | dirs as blobs | `lake/sources.tsv` row `reports` | code (new) |
 
@@ -104,3 +104,4 @@ Done on 2026-10-28: N1, N3, N4, N6, N7, N8 by task L; N2, N5, N9 by task M. Comm
 | N5 | **done** | 14 `.py` of the r14 runtime UFO committed as `dihiggs_ufo/releases/r14_runtime/LLscalar_v3_UFO_runtime` (14/14 sha256 = lake `20261014T025456Z-c67ca8`; differs from `_original` in `couplings.py`, `parameters.py`, `write_param_card.py`); `env.sh` and `generate_physical_point_proc_dir.sh` default to it. **Gate:** closure benchmark (m_H2 150, g 63.59, seeds 101/107, 10k events) σ = 0.23025 ± 0.00163 fb with old and new UFO, identical; the frozen 0.230291 fb came from a different setup (1000 events, hep_cross `1da2f70`) and is 0.02% away (test band 3%) | ufo `c41f452`, hep_cross `1b40d56` | 1 hidden dependency |
 | N9 | **done** | `python -m dhb.join_signal --points --registry --calibration --output`: σ only from the registry's `madgraph.authoritative_results` (no `--sigma` flag), VALID rows, duplicate `point_id` fails, then `dhb.llp_signal`. Calibration YAML created from llp_recast artifacts only; missing values `null` + issue #11 (also records the r7/r8 A×ε disagreement at cτ = 4.326 mm). Issue #3 (full end-to-end benchmark) stays open: N9 is its join step, not the benchmark | boundary `1fab1c1`, llp_recast `01fd17c` | by-hand arrows 8, 9 (arrow 6, points → MadGraph, is still by hand) |
 
+Task N (2026-10-28): boundary golden `evaluate_point_v1` regenerated for the accepted 70bbdf3 2HDMC shift (max rel 7.8e-10, `p5.width_gg_H2`; 92 float cells, no other change; boundary `23126c8`); boundary CI green again (matplotlib installed, golden built against dihiggs `a3b4907`, the 4 evaluator-dependent `_load` tests skip without the sibling build; `3513167`).
