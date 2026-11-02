@@ -1,12 +1,16 @@
 [submodule "dihiggs"]
 	path = dihiggs
 	url = https://github.com/fbientrigo/dihiggs.git
+	shallow = true
 [submodule "dihiggs_boundary"]
 	path = dihiggs_boundary
 	url = https://github.com/fbientrigo/dihiggs_boundary.git
+	shallow = true
 [submodule "dihiggs_hep_cross"]
 	path = dihiggs_hep_cross
 	url = https://github.com/fbientrigo/dihiggs_hep_cross.git
+	shallow = true
 [submodule "dihiggs_ufo"]
 	path = dihiggs_ufo
 	url = https://github.com/fbientrigo/dihiggs_ufo.git
+	shallow = true
