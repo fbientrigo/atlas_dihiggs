@@ -147,13 +147,12 @@ On (c), proposals are deterministic. `_contexts()` was re-run with the restored 
 1. **lambda7 ≠ 0 is not explored by the boundary pipeline.** Every boundary config pins `lambda7: 0.0`:
    - `dihiggs_boundary/configs/adaptive_m2_boundary_v1.yaml:13`
    - `survivor_adaptive_12520_v1.yaml:10`
-   - `adaptive_m2_exploration_v1.yaml:13`
    - `profiled_m2_boundary_v1.yaml:11`
 
    It is passed through as a constant (`adaptive_m2_mesh.py:220`, `survivor_adaptive_campaign.py:220`), not scanned. The lambda7 ≠ 0 work lives in `dihiggs/campaigns/lambda7_*` (`BENCHMARKS.csv`, `LAMBDA7_AB_COMPARISON.csv`). That data uses another schema, has no table in `sources.tsv`, and does not show up in `explored`.
 2. **"Valid" means theory-valid only.** `_theory_ok` (`profiled_m2_scan.py:35`) checks only `theory_ok_v1 == 1`. Over all point rows, `sum(experimental_evaluated) = 0`, so HiggsBounds/HiggsSignals (`runner.py`) never ran on these campaigns.
 3. **A region is 2-D per tan_beta slice.** lambda6 (via X) and Delta are profiled inside each leaf with 16 LHS proposals (`adaptive_m2_mesh.py:327`). So `explored` answers whether the (tanb, m_phi, Mbar) box was explored, not which (lambda6, Delta) were tried. The rows answer the second question.
-4. **The next run asks the lake: survivor v2 only (P1, done).** `survivor_adaptive_campaign --explored <export.csv>` seeds leaves; `sources.tsv` keeps `*_state.json`. Not wired: the older `adaptive_m2_mesh` and `adaptive_exploration` (`_occupied`, `adaptive_exploration.py:51`), which still read local state only, and the v1 survivor campaign (refuses `--explored`).
+4. **The next run asks the lake: survivor v2 only (P1, done).** `survivor_adaptive_campaign --explored <export.csv>` seeds leaves; `sources.tsv` keeps `*_state.json`. Not wired: the older `adaptive_m2_mesh`, which still reads local state only (`adaptive_exploration` was deleted 2026-11-02), and the v1 survivor campaign (refuses `--explored`).
 5. **Per-row producer provenance is missing.** `producer_commit` is `"unknown"` in 100% of rows. The producer is known only from the run manifest, via `commits.producer_git` → `regimes.producer_commit`.
 6. **The convention SHA is missing for old commits.** `mass_convention_authority` sits inside the run manifests, which are in blobs only. New commits capture it as `conventions`. For old commits, `mh_input_GeV` per row (125.13 vs 125.20) is the measured proxy.
 7. **There are two leaf vocabularies.** The boundary writes `coverage_state` (`adaptive_m2_mesh.py:133`) and `decision_state` (`survivor_adaptive_campaign.py:191`) with different rules. Lake recomputes one `status` from the points, and the boundary's own labels remain in the `boundary_leaves` and `survivor_leaf_aggregate` tables.
