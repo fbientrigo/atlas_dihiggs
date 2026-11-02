@@ -17,15 +17,13 @@ The workspace coordinates four independent git submodules:
 
 ## Quick Start
 
+Needs Python 3.11+, `g++`, `make`, GSL (`libgsl-dev`).
+
 ```sh
-# Clone complete workspace with all modules
-git clone --recursive <url>
-
-# Or clone root and initialize a single module
-git clone <url> && git submodule update --init <module>
-
-# Verify workspace integrity (requires pytest, PyYAML from requirements.txt)
-python3 scripts/check_workspace.py
+git clone --recursive https://github.com/fbientrigo/atlas_dihiggs.git && cd atlas_dihiggs
+make setup                       # .venv + deps + dhb; builds 2HDMC, evaluate_point, DihiggsPointV2Evaluator (~1.5 min)
+make smoke                       # autoresearch end-to-end smoke (~40 s)
+.venv/bin/python scripts/check_workspace.py
 ```
 
 ## Physics Authority & Provenance

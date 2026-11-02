@@ -1,2 +1,5 @@
-pytest==9.1.1
-PyYAML==6.0.3
+# Root: scripts/check_workspace.py, lake/ (tested on duckdb 1.5.6 and 2.0.0), dihiggs_boundary (dhb.atlas: pyarrow).
+pytest>=8
+PyYAML>=6.0
+duckdb>=1.5
+pyarrow>=14

@@ -8,6 +8,7 @@
 !/CLAUDE.md
 !/README.md
 !/requirements.txt
+!/Makefile
 !/docs/
 /docs/audits/*
 !/docs/audits/ARCHITECTURE_SIMPLIFICATION_REPORT.md

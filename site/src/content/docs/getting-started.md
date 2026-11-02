@@ -14,47 +14,17 @@ description: "Setup, submodule initialization, offline workspace validation, and
 
 ## Workspace Setup
 
-The root repository coordinates four Git submodules. You can clone the full workspace at once or initialize only specific modules as needed.
-
-### 1. Cloning the Workspace
-
-import { Tabs, TabItem } from '@astrojs/starlight/components';
-
-<Tabs>
-  <TabItem label="Full Checkout (All 4 Submodules)">
-    To fetch the root workspace and all four submodules:
-    ```bash
-    git clone --recursive https://github.com/fbientrigo/atlas_dihiggs.git atlas_dihiggs
-    cd atlas_dihiggs
-    ```
-  </TabItem>
-  <TabItem label="Modular Checkout (Single Submodule)">
-    To initialize only a specific submodule (e.g. `dihiggs` for theory evaluation):
-    ```bash
-    git clone https://github.com/fbientrigo/atlas_dihiggs.git atlas_dihiggs
-    cd atlas_dihiggs
-    git submodule update --init dihiggs
-    ```
-  </TabItem>
-</Tabs>
-
-### 2. Lightweight Verification Environment
-
-The root repository provides an offline checker to verify submodule revisions, the convention file, and campaign state without requiring heavy physics compilers or simulation software.
-
-Create and activate a minimal virtual environment:
+Needs Python 3.11+, `g++`, `make` and GSL (`libgsl-dev`). From a fresh clone:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+git clone --recursive https://github.com/fbientrigo/atlas_dihiggs.git atlas_dihiggs
+cd atlas_dihiggs
+make setup    # .venv + deps + dhb; builds 2HDMC, evaluate_point, DihiggsPointV2Evaluator (~1.5 min)
+make smoke    # autoresearch end-to-end smoke (~40 s)
+.venv/bin/python scripts/check_workspace.py
 ```
 
-Verify workspace integrity:
-
-```bash
-python3 scripts/check_workspace.py
-```
+The same three steps run in CI (`.github/workflows/smoke.yml`, Python 3.13).
 
 The checker confirms:
 - Submodule gitlinks match pinned revisions.
@@ -66,7 +36,7 @@ The checker confirms:
 
 ## Toolchain & External Physics Prerequisites
 
-While the root environment checker only requires Python with `pytest` and `PyYAML`, running full simulation and evaluation stages requires specialized scientific software:
+`make setup` covers the C++/GSL row; the other stages need their own software:
 
 | Toolchain / Dependency | Required By | Version / Spec | Purpose & Scope |
 |---|---|---|---|
@@ -74,7 +44,7 @@ While the root environment checker only requires Python with `pytest` and `PyYAM
 | **MadGraph5_aMC@NLO** | `dihiggs_hep_cross` | Version 3.4+ | Hard-scattering event generation and cross section integration. |
 | **Pythia 8 & FastJet** | `dihiggs_ufo` | Pythia 8.3+, FastJet 3.4+ | Parton showering, hadronization, and jet clustering. |
 | **HiggsTools / 2HDMC** | `dihiggs_boundary` | HiggsTools v1.2, 2HDMC v1.8 | Standard Model and BSM Higgs experimental limit testing (HiggsBounds / HiggsSignals). |
-| **DuckDB & rclone** | `lake` (optional) | DuckDB 1.0+, rclone | Direct SQL query interface over Parquet lake tables and Google Drive synchronization. |
+| **DuckDB & rclone** | `lake` (optional) | DuckDB 1.5+ (installed by `make setup`), rclone | Direct SQL query interface over Parquet lake tables and Google Drive synchronization. |
 
 ---
 

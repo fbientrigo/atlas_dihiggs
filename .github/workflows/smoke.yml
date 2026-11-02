@@ -1,0 +1,23 @@
+name: Fresh-clone smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: sudo apt-get update && sudo apt-get install -y libgsl-dev
+      - run: make setup
+      - run: make smoke
+      - run: .venv/bin/python scripts/check_workspace.py

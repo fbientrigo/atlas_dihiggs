@@ -162,7 +162,7 @@ def to_parquet(root, glob, out, only=None):
             print(f"table {glob}: retrying with looser typing ({str(e)[:120]})", file=sys.stderr)
     else:
         sys.exit(f"could not convert {glob}")
-    return con.execute(f"SELECT count(*) FROM read_parquet('{out}')").fetchone()[0]
+    return con.execute(f"SELECT count(*) FROM read_parquet('{out}')").fetchall()[0][0]
 
 
 # Columns a compact table keeps for theory-invalid rows: the exact inputs and ids that say "this point was already run"
@@ -182,7 +182,7 @@ def compact(src, valid, invalid):
     bad, parts = "coalesce(TRY_CAST(theory_ok_v1 AS DOUBLE), 0) != 1", []
     for dst, q in ((valid, f"SELECT * FROM {src} WHERE NOT ({bad})"), (invalid, f"SELECT {keep} FROM {src} WHERE {bad}")):
         con.execute(f"COPY ({q}) TO '{dst}' (FORMAT parquet, COMPRESSION zstd)")
-        n = con.execute(f"SELECT count(*) FROM read_parquet('{dst}')").fetchone()[0]
+        n = con.execute(f"SELECT count(*) FROM read_parquet('{dst}')").fetchall()[0][0]
         if n or dst == valid:
             parts.append((dst, n))
     return parts
@@ -420,7 +420,8 @@ def cmd_explored(a):
         if v is not None:
             w.append(f"? BETWEEN {col}_min_GeV AND {col}_max_GeV"); args.append(v)
     con, where = connect(a), (" WHERE " + " AND ".join(w)) if w else ""
-    if not con.execute("SELECT count(*) FROM duckdb_views() WHERE view_name = 'explored'").fetchone()[0]:
+    # fetchall, not fetchone: duckdb>=2 keeps an undrained result open and blocks the connection
+    if not con.execute("SELECT count(*) FROM duckdb_views() WHERE view_name = 'explored'").fetchall()[0][0]:
         sys.exit("no point tables in the lake (need columns: " + ", ".join(sorted(POINT_COLUMNS)) + ")")
     if a.export:  # the file a boundary run takes as --explored: it never needs lake.py, rclone or DuckDB
         rel = con.sql(f"SELECT * FROM explored{where} ORDER BY leaf_id, commit", params=args)
