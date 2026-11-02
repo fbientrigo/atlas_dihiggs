@@ -1,7 +1,6 @@
 [submodule "dihiggs"]
 	path = dihiggs
 	url = https://github.com/fbientrigo/dihiggs.git
-	shallow = true
 [submodule "dihiggs_boundary"]
 	path = dihiggs_boundary
 	url = https://github.com/fbientrigo/dihiggs_boundary.git
