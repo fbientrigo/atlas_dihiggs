@@ -21,4 +21,5 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libgsl-dev
       - run: make setup
       - run: make smoke
+      - run: git submodule foreach --quiet 'git status --short --untracked-files=no | sed "s|^|$name: |"'
       - run: .venv/bin/python scripts/check_workspace.py
