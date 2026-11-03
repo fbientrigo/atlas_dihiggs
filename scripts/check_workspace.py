@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONV = "conventions/physics_conventions.yaml"
 SHA = "4f3a938ed54dbc779d25f691ce1dd06fe17af69751105dc3b69ccb6b7d92fff6"
 V3 = "physics_conventions_v3"
-LOCKS = ("dihiggs_boundary", "dihiggs_hep_cross")  # external_tools.lock.yaml carries the sha pin
+LOCKS = ("dihiggs_boundary", "dihiggs_hep_cross")  # external_tools.lock.yaml: sha pin + tool versions equal to dihiggs
 
 
 def git(repo, *args):
@@ -36,11 +36,14 @@ def main():
     source = canonical(pins["dihiggs"])
     if source is None:
         bad.append("dihiggs gitlink does not carry the pinned convention bytes")
+    versions = lambda name: {k: v["version"] for k, v in yaml.safe_load((ROOT / name / "external_tools.lock.yaml").read_text())["tools"].items()}
     for name in LOCKS:
         try:
             lock = yaml.safe_load((ROOT / name / "external_tools.lock.yaml").read_text())["conventions"]
             if (lock.get("sha256"), lock.get("schema_version")) != (SHA, V3):
                 bad.append(f"{name}: external_tools.lock.yaml convention lock is stale")
+            if versions(name) != versions("dihiggs"):
+                bad.append(f"{name}: external_tools.lock.yaml tool versions differ from dihiggs")
         except (OSError, yaml.YAMLError, AttributeError, KeyError, TypeError) as exc:
             bad.append(f"{name}: external_tools.lock.yaml unreadable: {exc}")
     try:
