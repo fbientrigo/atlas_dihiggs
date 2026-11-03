@@ -29,7 +29,9 @@ The `dihiggs` repository serves as the single source of truth for all theory def
 
 - `dihiggs/app/Lambda1EvaluatorV2`: Point evaluation for explicit $(m_H, \lambda_1)$ target inputs using schema `dihiggs.lambda1.v2`.
 - `dihiggs/app/DihiggsPointV2Evaluator`: Rectangular grid evaluation in $(m_H, M_2)$ using schema `dihiggs.point.v2`.
-- `dihiggs/src/ColabRecomputeValidation.cpp`: Cross-validation between legacy Colab analytical implementations and 2HDMC base calculator.
+- `dihiggs/app/Phys_M2BandTracker`: Experimental bounded-pilot M2 interval tracker (not canonical point production).
+
+The legacy lambda1 / PhysScanWithFixings subsystem was removed from `dihiggs`; reproduce old campaigns with `git checkout legacy-lambda1-final` there.
 
 ---
 
