@@ -443,7 +443,7 @@ def sources():
         if ln.strip() and not ln.startswith("#"):
             pat, auth, prune, *t = ln.split("\t") + [""]
             prune, *never = prune.split()
-            for d in sorted(globmod.glob(str(WORKSPACE / pat))):
+            for d in sorted(globmod.glob(os.path.normpath(WORKSPACE / pat))):  # normpath: "../x" rows resolve to the same dir old commits recorded
                 if Path(d).is_dir():
                     yield Path(d), auth, prune == "yes", [x for x in (t[0].split() if t else []) if x], [g.lstrip("-") for g in never]
 

@@ -18,4 +18,4 @@ cernbox_catalog	forbidden_as_current	keep
 _handoff	forbidden_as_current	keep	
 results	forbidden_as_current	keep	
 dihiggs_ufo	candidate	keep	
-/home/fabian/atlas_dihiggs_archive/20260831_pre_madgraph_reset	historical	keep	
+../atlas_dihiggs_archive/20260831_pre_madgraph_reset	historical	keep	

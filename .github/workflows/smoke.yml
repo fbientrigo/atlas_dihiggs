@@ -11,9 +11,6 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      # No LFS filter, as on a plain clone: dihiggs/.gitattributes routes **/*.csv to LFS but 19 CSVs are plain
-      # blobs, so with the runner's filter `git status` shows them modified. Drop this once dihiggs renormalizes.
-      - run: sudo git lfs uninstall --system; git lfs uninstall
       - uses: actions/checkout@v4
         with:
           submodules: recursive
