@@ -16,6 +16,7 @@ AUTHORITY = ("current", "candidate", "historical", "forbidden_as_current")
 MANIFESTS = ("manifest.json", "run_manifest.json")
 DEFAULT_REMOTE = "dihiggs_lake:store"  # rclone remote; recreate it on a new machine (see README.md)
 WORKSPACE = Path(__file__).resolve().parent.parent
+OLD_WORKSPACE = "/home/fabian/atlas_dihiggs"  # commits before 2026-11-03 recorded absolute source_path from here (read side only)
 CACHE = Path(os.environ.get("LAKE_CACHE", Path.home() / ".cache" / "lake"))
 
 
@@ -69,6 +70,12 @@ def _hash(path, algo):
         for b in iter(lambda: f.read(1 << 20), b""):
             h.update(b)
     return h.hexdigest()
+
+
+def source_dir(rec):
+    """Local dir of a commit's files. New commits record source_path relative to the workspace, so every clone matches."""
+    p = rec["source_path"]
+    return Path(os.path.normpath(WORKSPACE / (os.path.relpath(p, OLD_WORKSPACE) if os.path.isabs(p) else p)))
 
 
 def _remote(args):
@@ -199,7 +206,7 @@ def cmd_commit(a):
         subprocess.run(["tar", "--zstd", "-cf", str(blob), "-C", str(root), "--null", "-T", str(lst)], check=True)
         bsha = _hash(blob, "sha256")
         rem.put(blob, f"blobs/{bsha}.tar.zst")
-        rec = {"cid": cid, "message": a.message, "authority": a.authority, "source_path": str(root),
+        rec = {"cid": cid, "message": a.message, "authority": a.authority, "source_path": os.path.relpath(root, WORKSPACE),
                "host": socket.gethostname(), "created_utc": cid.split("-")[0],
                "blob": {"sha256": bsha, "md5": _hash(blob, "md5"), "size": blob.stat().st_size, "n_files": len(files)},
                "tables": [], "producer_git": manifest_records(root, a.producer_manifest), "committer_git": git_state(root),
@@ -290,7 +297,7 @@ def cmd_prune(a):
     if g["head"] and g["head_on_remote"] is False and not a.allow_unpushed and not on_remote(g["repo"], g["head"]):
         sys.exit(f"refusing: code HEAD {g['head'][:7]} is not on its remote (push it, or --allow-unpushed)")
     cutoff = time.time() - a.older_than * 86400
-    root, delete, keep = Path(rec["source_path"]), [], []
+    root, delete, keep = source_dir(rec), [], []
     git = tracked(root) if root.is_dir() else set()
     never = [g for *_, globs in rules(root) for g in globs]  # sources.tsv "yes -GLOB": e.g. run state a later run resumes from
     for f in load_files(rem, rec):
@@ -356,7 +363,7 @@ def cmd_ls(a):
     for r in records(_remote(a), a.offline):
         g = r["committer_git"]
         print(r["cid"], r["authority"], f"{r['blob']['n_files']}f", (g["head"] or "nogit")[:7],
-              "dirty" if g["dirty"] else "clean", r["source_path"].replace(str(WORKSPACE) + "/", ""), r["message"], sep="\t")
+              "dirty" if g["dirty"] else "clean", os.path.relpath(source_dir(r), WORKSPACE), r["message"], sep="\t")
 
 
 # ---- explored: coverage of the parameter space, derived from the point tables --------------
@@ -468,7 +475,7 @@ def cmd_sync(a):
     with ThreadPoolExecutor(8) as ex:  # mark covered files (same path and sha256) so only new/changed ones are committed
         for rec, files in zip(recs, ex.map(lambda r: load_files(rem, r), recs)):
             for f in files:
-                k = os.path.join(rec["source_path"], f["path"])
+                k = os.path.join(source_dir(rec), f["path"])
                 if claimed.get(k) == f["sha256"]:
                     del claimed[k]
     new = 0
@@ -481,7 +488,7 @@ def cmd_sync(a):
         cmd_catalog(a)
     print(f"{new} new commits")
     for rec in records(rem):  # records() re-reads the mirror, which now includes the commits just made
-        root = Path(rec["source_path"])
+        root = source_dir(rec)
         rows = rules(root)
         if not rows or not all(p for _, p, _ in rows) or not any((root / f["path"]).is_file() for f in load_files(rem, rec)):
             continue

@@ -19,6 +19,7 @@ def main():
         cid = lake.cmd_commit(argparse.Namespace(dir=str(src), message="t", authority="candidate", exclude=[], producer_manifest=[],
                                                  table=["pts=**/*.csv"], remote=str(remote)))
         rec = lake.verify(r, cid)
+        assert not os.path.isabs(rec["source_path"]) and lake.source_dir(rec) == src.resolve()  # clone-independent key
         assert rec["producer_git"] == [{"path": "manifest.json.git", "commit": "abc123", "dirty": True}]
         assert rec["tables"][0]["rows"] == 3, rec["tables"]
 
@@ -194,5 +195,15 @@ def compact_keep_and_export():
         assert got == sorted(2 * [1e7 + 0.123456789 * i for i in range(6)]), got  # one row per leaf x commit, exact
 
 
+def old_absolute_source_path():
+    """Commits recorded before relative keys still resolve inside whatever clone reads them."""
+    old = {"source_path": lake.OLD_WORKSPACE + "/dihiggs/campaigns/x"}
+    assert lake.source_dir(old) == lake.WORKSPACE / "dihiggs/campaigns/x"
+    arch = {"source_path": lake.OLD_WORKSPACE + "_archive/run"}  # a sibling of the old workspace stays a sibling
+    assert lake.source_dir(arch) == lake.WORKSPACE.parent / "atlas_dihiggs_archive/run"
+    assert lake.source_dir({"source_path": "dihiggs/campaigns/x"}) == lake.WORKSPACE / "dihiggs/campaigns/x"
+
+
 if __name__ == "__main__":
     main()
+    old_absolute_source_path()
